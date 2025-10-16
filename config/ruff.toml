@@ -34,6 +34,7 @@ ignore = [
     "ARG005",  # Unused lambda argument
     "C901",  # Too complex
     "D105",  # Missing docstring in magic method
+    "D401", # Imperative mood
     "D417",  # Missing argument description in the docstring
     "E501",  # Line too long
     "ERA001",  # Commented out code
@@ -81,7 +82,7 @@ ban-relative-imports = "all"
 known-first-party = ["pyfs"]
 
 [lint.pydocstyle]
-convention = "google"
+convention = "numpy"
 
 [format]
 exclude = [
