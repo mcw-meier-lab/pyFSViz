@@ -30,6 +30,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "importlib-resources>=6.5.2",
     "matplotlib>=3.9.4",
     "nilearn>=0.12.1",
     "nipype>=1.10.0",
