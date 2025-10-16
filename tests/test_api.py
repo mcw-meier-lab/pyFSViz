@@ -99,9 +99,7 @@ def _fixture_inventory() -> Inventory:
 def test_exposed_objects(modulelevel_internal_objects: list[griffe.Object | griffe.Alias]) -> None:
     """All public objects in the internal API are exposed under `pyfs`."""
     not_exposed = [
-        obj.path
-        for obj in modulelevel_internal_objects
-        if obj.name not in pyfs.__all__ or not hasattr(pyfs, obj.name)
+        obj.path for obj in modulelevel_internal_objects if obj.name not in pyfs.__all__ or not hasattr(pyfs, obj.name)
     ]
     assert not not_exposed, "Objects not exposed:\n" + "\n".join(sorted(not_exposed))
 
@@ -155,11 +153,7 @@ def test_inventory_matches_api(
     public_api_paths = {obj.path for obj in public_objects}
     public_api_paths.add("pyfs")
     for item in inventory.values():
-        if (
-            item.domain == "py"
-            and "(" not in item.name
-            and (item.name == "pyfs" or item.name.startswith("pyfs."))
-        ):
+        if item.domain == "py" and "(" not in item.name and (item.name == "pyfs" or item.name.startswith("pyfs.")):
             obj = loader.modules_collection[item.name]
             if obj.path not in public_api_paths and not any(path in public_api_paths for path in obj.aliases):
                 not_in_api.append(item.name)
