@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from nilearn import plotting
 from nipype.interfaces.freesurfer import MRIConvert
 from nipype.interfaces.fsl import FLIRT
 from nireports.interfaces.reporting.base import SimpleBeforeAfterRPT
+
+from pyfs.reports import Template
 
 
 def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColormap:
@@ -398,3 +401,82 @@ class FreeSurfer:
                 plt.close()
 
         return sorted(Path(output_dir).glob("*svg"))
+
+    def gen_html_report(
+        self,
+        subject: str,
+        output_dir: str,
+        img_out: str | None = None,
+        template: str | None = None,
+    ) -> Path:
+        """Generate html report with FreeSurfer images.
+
+        Parameters
+        ----------
+        subject : str
+            Subject ID.
+        output_dir : str
+            HTML file name
+        img_out : str | None
+            Location where SVG images are saved, default is subject's data directory.
+        template : str | None
+            HTML template to use. Default is local freesurfer.html.
+
+        Returns
+        -------
+        Path:
+            Path to html file.
+
+        Examples
+        --------
+        >>> from pyfs.freesurfer import FreeSurfer
+        >>> fs_dir = FreeSurfer(
+        ...     freesurfer_home="/opt/freesurfer",
+        ...     subjects_dir="/opt/data",
+        ...     subject="sub-001",
+        ... )
+        >>> report = fs_dir.gen_html_report(out_name="sub-001.html", output_dir=".")
+        """
+        if template is None:
+            template = files("pyfs._internal.html") / "individual.html"
+        if img_out is None:
+            image_list = list((self.subjects_dir / subject).glob("*/*svg"))
+        else:
+            image_list = list(Path(img_out).glob("*svg"))
+
+        tlrc = []
+        aseg = []
+        surf = []
+
+        for img in image_list:
+            with open(img, "r", encoding="utf-8") as img_file:
+                img_data = img_file.read()
+
+            if "tlrc" in img.name:
+                tlrc.append(img_data)
+            elif "aseg" in img.name or "aparc" in img.name:
+                aseg.append(img_data)
+            else:
+                labels = {
+                    "lh_pial": "LH Pial",
+                    "rh_pial": "RH Pial",
+                    "lh_infl": "LH Inflated",
+                    "rh_infl": "RH Inflated",
+                    "lh_white": "LH White Matter",
+                    "rh_white": "RH White Matter",
+                }
+                surf_tuple = (labels[img.stem], img_data)
+                surf.append(surf_tuple)
+
+        _config = {
+            "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d, %H:%M"),
+            "subject": subject,
+            "tlrc": tlrc,
+            "aseg": aseg,
+            "surf": surf,
+        }
+
+        tpl = Template(str(template))
+        tpl.generate_conf(_config, f"{output_dir}/{subject}.html")
+
+        return Path(output_dir) / f"{subject}.html"
