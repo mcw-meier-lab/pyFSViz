@@ -29,7 +29,15 @@ classifiers = [
     "Topic :: Utilities",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    "matplotlib>=3.9.4",
+    "nilearn>=0.12.1",
+    "nipype>=1.10.0",
+    "nireports>=25.0.1",
+    "numpy>=2.0.2",
+    "pandas>=2.3.3",
+    "plotly>=6.3.1",
+]
 
 [project.urls]
 Homepage = "https://mcw-meier-lab.github.io/pyFS"
