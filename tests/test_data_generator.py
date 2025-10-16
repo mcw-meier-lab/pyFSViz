@@ -141,7 +141,7 @@ def create_minimal_mgz_files(mri_dir: Path, shape: tuple[int, int, int] = (256, 
 def create_minimal_transform_files(transforms_dir: Path) -> None:
     """Create minimal transform files."""
     # talairach.xfm.lta - FreeSurfer LTA format
-    with open(transforms_dir / "talairach.xfm.lta", "w") as f:
+    with open(transforms_dir / "talairach.xfm.lta", "w", encoding="utf-8") as f:
         f.write("# LTA file\n")
         f.write("# Transform matrix\n")
         f.write("# Created for testing\n")
@@ -153,7 +153,7 @@ def create_minimal_transform_files(transforms_dir: Path) -> None:
         f.write("0.00000000 0.00000000 0.00000000 1.00000000\n")
 
     # talairach.lta (copy for compatibility)
-    with open(transforms_dir / "talairach.lta", "w") as f:
+    with open(transforms_dir / "talairach.lta", "w", encoding="utf-8") as f:
         f.write("# LTA file\n")
         f.write("# Transform matrix\n")
         f.write("# Created for testing\n")
@@ -282,7 +282,7 @@ def create_annotation_file(annot_file: Path) -> None:
 
 def create_minimal_recon_log(scripts_dir: Path) -> None:
     """Create minimal recon-all.log file."""
-    with open(scripts_dir / "recon-all.log", "w") as f:
+    with open(scripts_dir / "recon-all.log", "w", encoding="utf-8") as f:
         f.write("FreeSurfer recon-all started\n")
         f.write("Processing steps...\n")
         f.write("recon-all finished without error\n")
@@ -323,7 +323,7 @@ def create_mock_freesurfer_home(output_dir: Path) -> Path:
 
     # Create FreeSurferColorLUT.txt
     lut_file = freesurfer_home / "FreeSurferColorLUT.txt"
-    with open(lut_file, "w") as f:
+    with open(lut_file, "w", encoding="utf-8") as f:
         f.write("# FreeSurfer Color Look Up Table\n")
         f.write("# No. Label Name: R G B A\n")
         f.write("0   Unknown 0 0 0 0\n")

@@ -78,3 +78,63 @@ def test_gen_surf_plots_basic(freesurfer: FreeSurfer) -> None:
     sig = inspect.signature(freesurfer.gen_surf_plots)
     assert "subject" in sig.parameters
     assert "output_dir" in sig.parameters
+
+
+def test_gen_html_report_basic(freesurfer: FreeSurfer) -> None:
+    """Test basic HTML report generation functionality."""
+    # Test that the method exists and can be called
+    assert hasattr(freesurfer, "gen_html_report")
+
+    # Test that it expects the right parameters
+    sig = inspect.signature(freesurfer.gen_html_report)
+    assert "subject" in sig.parameters
+    assert "output_dir" in sig.parameters
+    assert "img_out" in sig.parameters
+    assert "template" in sig.parameters
+
+
+@pytest.mark.skip(reason="Requires jinja2 and proper SVG files")
+def test_gen_html_report(freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    """Test HTML report generation."""
+    # Create mock SVG files
+    mock_svg_dir = temp_output_dir / "mock_svgs"
+    mock_svg_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create different types of SVG files
+    svg_files = {
+        "tlrc.svg": "<svg><text>Talairach Registration</text></svg>",
+        "aseg.svg": "<svg><text>Aseg Parcellation</text></svg>",
+        "aparc.svg": "<svg><text>Aparc Parcellation</text></svg>",
+        "lh_pial.svg": "<svg><text>LH Pial Surface</text></svg>",
+        "rh_pial.svg": "<svg><text>RH Pial Surface</text></svg>",
+    }
+
+    for filename, content in svg_files.items():
+        with open(mock_svg_dir / filename, "w") as f:
+            f.write(content)
+
+    # Generate HTML report
+    html_file = freesurfer.gen_html_report(
+        subject="sub-001",
+        output_dir=str(temp_output_dir),
+        img_out=str(mock_svg_dir),
+    )
+
+    # Check that HTML file was created
+    assert html_file.exists()
+    assert html_file.name == "sub-001.html"
+
+    # Check HTML content
+    with open(html_file, encoding="utf-8") as f:
+        html_content = f.read()
+
+    # Check that all SVG content is included
+    assert "Talairach Registration" in html_content
+    assert "Aseg Parcellation" in html_content
+    assert "Aparc Parcellation" in html_content
+    assert "LH Pial Surface" in html_content
+    assert "RH Pial Surface" in html_content
+
+    # Check HTML structure
+    assert "<html" in html_content
+    assert "FreeSurfer: Individual Report" in html_content
