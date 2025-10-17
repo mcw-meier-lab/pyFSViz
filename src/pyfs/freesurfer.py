@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import os
 from pathlib import Path
 
@@ -59,6 +60,7 @@ class FreeSurfer:
         self,
         freesurfer_home: str | None = None,
         subjects_dir: str | None = None,
+        log_level: str = "INFO",
     ):
         """Initialize the FreeSurfer data.
 
@@ -68,12 +70,19 @@ class FreeSurfer:
         Path corresponding to FREESURFER_HOME env var.
         subjects_dir : path or str representing a path to a directory
         Path corresponding to SUBJECTS_DIR env var.
+        log_level : str
+            Logging level (e.g., "INFO", "DEBUG", "WARNING").
+            Default is "INFO".
 
         Returns
         -------
         None
 
         """
+        # Set up logger
+        logging.basicConfig(level=getattr(logging, log_level.upper()))
+        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
         if freesurfer_home is None:
             self.freesurfer_home = Path(os.environ.get("FREESURFER_HOME") or "")
         else:
@@ -449,7 +458,7 @@ class FreeSurfer:
         surf = []
 
         for img in image_list:
-            with open(img, "r", encoding="utf-8") as img_file:
+            with open(img, encoding="utf-8") as img_file:
                 img_data = img_file.read()
 
             if "tlrc" in img.name:
@@ -480,3 +489,121 @@ class FreeSurfer:
         tpl.generate_conf(_config, f"{output_dir}/{subject}.html")
 
         return Path(output_dir) / f"{subject}.html"
+
+    def gen_batch_reports(
+        self,
+        output_dir: str | Path,
+        subjects: list[str] | None = None,
+        template: str | None = None,
+        *,
+        gen_images: bool = True,
+        skip_failed: bool = True,
+    ) -> dict[str, Path | Exception]:
+        """Generate HTML reports with images for multiple subjects.
+
+        This method first generates all required images (TLRC, aparc+aseg, surfaces)
+        and then creates HTML reports for each subject.
+
+        Parameters
+        ----------
+        output_dir : str or Path
+            Directory where HTML reports will be saved.
+        subjects : list[str] or None
+            List of subject IDs to process. If None, processes all subjects
+            in the subjects directory.
+        template : str or None
+            HTML template to use. Default is local individual.html.
+        gen_images : bool
+            Generate images for each subject. Default is True.
+        skip_failed : bool
+            If True, continues processing other subjects if one fails.
+            If False, raises exception on first failure.
+
+        Returns
+        -------
+        dict[str, Path | Exception]
+            Dictionary mapping subject IDs to either the generated HTML file
+            path or the exception that occurred during processing.
+
+        Examples
+        --------
+        >>> from pyfs.freesurfer import FreeSurfer
+        >>> fs = FreeSurfer()
+        >>> results = fs.gen_batch_reports("reports/", log_level="INFO")
+        >>> for subject, result in results.items():
+        ...     if isinstance(result, Path):
+        ...         print(f"Generated report for {subject}: {result}")
+        ...     else:
+        ...         print(f"Failed to generate report for {subject}: {result}")
+        """
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if subjects is None:
+            subjects = self.get_subjects()
+
+        self.logger.info(f"Generating reports with images for {len(subjects)} subjects...")
+        self.logger.info(f"Output directory: {output_dir}")
+
+        results: dict[str, Path | Exception] = {}
+
+        for i, subject in enumerate(subjects, 1):
+            self.logger.info(f"[{i}/{len(subjects)}] Processing subject: {subject}")
+
+            try:
+                # Check if recon-all completed successfully
+                if not self.check_recon_all(subject):
+                    self.logger.warning(f"Subject {subject} recon-all did not complete successfully")
+
+                # Create subject-specific output directory for images
+                subject_output_dir = output_dir / subject
+                subject_output_dir.mkdir(parents=True, exist_ok=True)
+
+                # Generate images
+                self.logger.info(f"  Generating images for {subject}...")
+
+                if gen_images:
+                    # Generate TLRC data and report
+                    tlrc_dir = subject_output_dir / "tlrc"
+                    tlrc_dir.mkdir(parents=True, exist_ok=True)
+                    self.gen_tlrc_data(subject, str(tlrc_dir))
+                    self.gen_tlrc_report(subject, str(tlrc_dir))
+
+                    # Generate aparc+aseg plots
+                    aparc_dir = subject_output_dir / "aparcaseg"
+                    aparc_dir.mkdir(parents=True, exist_ok=True)
+                    self.gen_aparcaseg_plots(subject, str(aparc_dir))
+
+                    # Generate surface plots
+                    surf_dir = subject_output_dir / "surfaces"
+                    surf_dir.mkdir(parents=True, exist_ok=True)
+                    self.gen_surf_plots(subject, str(surf_dir))
+
+                # Generate HTML report using all generated images
+                html_file = self.gen_html_report(
+                    subject=subject,
+                    output_dir=str(output_dir),
+                    img_out=str(subject_output_dir),
+                    template=template,
+                )
+
+                results[subject] = html_file
+
+                self.logger.info(f"  ✓ Generated report with images: {html_file}")
+
+            except Exception as e:
+                error_msg = f"Failed to generate report with images for {subject}: {e!s}"
+                results[subject] = e
+
+                self.logger.error(f"  ✗ {error_msg}")  # noqa: TRY400
+
+                if not skip_failed:
+                    raise e  # noqa: TRY201 # pylint: disable=try-except-raise
+
+        successful = sum(1 for result in results.values() if isinstance(result, Path))
+        failed = len(results) - successful
+        self.logger.info("\nBatch report generation with images completed:")
+        self.logger.info(f"  Successful: {successful}")
+        self.logger.info(f"  Failed: {failed}")
+
+        return results
