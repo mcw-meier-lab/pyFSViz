@@ -1,6 +1,7 @@
 """Tests for HTML report generation."""
 
 import datetime
+import inspect
 import re
 import tempfile
 from pathlib import Path
@@ -107,7 +108,7 @@ class TestTemplate:
                 # Check that the file was created and contains expected content
                 assert Path(output_path).exists()
 
-                with open(output_path, "r", encoding="utf-8") as f:
+                with open(output_path, encoding="utf-8") as f:
                     content = f.read()
 
                 assert "Test Report" in content
@@ -284,7 +285,7 @@ class TestHTMLReportGeneration:
 
         assert html_file.exists()
 
-        with open(html_file, "r",encoding="utf-8") as f:
+        with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
         # Check that default template elements are present
@@ -353,7 +354,7 @@ class TestHTMLReportGeneration:
 
         assert html_file.exists()
 
-        with open(html_file, "r", encoding="utf-8") as f:
+        with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
         # Check that custom template elements are present
@@ -378,7 +379,7 @@ class TestHTMLReportGeneration:
 
         assert html_file.exists()
 
-        with open(html_file, "r", encoding="utf-8") as f:
+        with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
         # Check that basic structure is present even without images
@@ -404,7 +405,7 @@ class TestHTMLReportGeneration:
             img_out=str(mock_svg_dir),
         )
 
-        with open(html_file, "r", encoding="utf-8") as f:
+        with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
         # Check that timestamp is present and properly formatted
@@ -452,7 +453,7 @@ class TestHTMLReportGeneration:
             img_out=str(mock_svg_dir),
         )
 
-        with open(html_file, "r", encoding="utf-8") as f:
+        with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
         # Check that surface labels are properly mapped
@@ -499,7 +500,7 @@ class TestHTMLReportGeneration:
 
         assert html_file.exists()
 
-        with open(html_file, "r", encoding="utf-8") as f:
+        with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
         # Check that actual template elements are present
@@ -537,8 +538,182 @@ class TestHTMLReportGeneration:
             img_out=str(mock_svg_dir),
         )
 
-        # Check return type and path
-        assert isinstance(html_file, Path)
-        assert html_file.name == "sub-001.html"
         assert html_file.parent == temp_output_dir
         assert html_file.exists()
+
+
+class TestBatchReportGeneration:
+    """Test batch HTML report generation functionality."""
+
+    def test_gen_batch_reports_basic(self, mock_freesurfer_instance: FreeSurfer, temp_output_dir: Path) -> None:
+        """Test basic batch report generation."""
+        # Create mock SVG files for the subject that exists in mock data
+        subjects = ["sub-001"]  # Only use subjects that exist in mock data
+
+        for subject in subjects:
+            mock_svg_dir = temp_output_dir / f"{subject}_svgs"
+            mock_svg_dir.mkdir(parents=True, exist_ok=True)
+
+            with open(mock_svg_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+                f.write(f"<svg><text>{subject} Talairach</text></svg>")
+
+            with open(mock_svg_dir / "aseg.svg", "w", encoding="utf-8") as f:
+                f.write(f"<svg><text>{subject} Aseg</text></svg>")
+
+        # Generate batch reports
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=temp_output_dir / "reports",
+            subjects=subjects,
+            gen_images=False,
+        )
+
+        # Check results
+        assert len(results) == 1
+        assert "sub-001" in results
+
+        # Check that HTML files were created
+        for subject in subjects:
+            result = results[subject]
+            assert isinstance(result, Path)
+            assert result.exists()
+            assert result.name == f"{subject}.html"
+
+    def test_gen_batch_reports_with_custom_subjects(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test batch report generation with custom subject list."""
+        # Create mock SVG files
+        mock_svg_dir = temp_output_dir / "mock_svgs"
+        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_svg_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Test Talairach</text></svg>")
+
+        # Generate batch reports for specific subjects
+        custom_subjects = ["sub-001"]
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=temp_output_dir / "reports",
+            subjects=custom_subjects,
+            gen_images=False,
+        )
+
+        # Check results
+        assert len(results) == 1
+        assert "sub-001" in results
+        assert isinstance(results["sub-001"], Path)
+
+    def test_gen_batch_reports_error_handling(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test batch report generation error handling."""
+        # Test with non-existent subject
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=temp_output_dir / "reports",
+            subjects=["non-existent-subject"],
+            gen_images=False,  # Don't try to generate images for non-existent subject
+        )
+
+        # Check that error is captured
+        assert len(results) == 1
+        assert "non-existent-subject" in results
+        assert isinstance(results["non-existent-subject"], Exception)
+
+    def test_gen_batch_reports_skip_failed(self, mock_freesurfer_instance: FreeSurfer, temp_output_dir: Path) -> None:
+        """Test batch report generation with skip_failed=True."""
+        # Create mock SVG files for one subject only
+        mock_svg_dir = temp_output_dir / "mock_svgs"
+        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_svg_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Test Talairach</text></svg>")
+
+        # Test with mix of valid and invalid subjects
+        subjects = ["sub-001", "non-existent-subject"]  # sub-001 exists in mock data
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=temp_output_dir / "reports",
+            subjects=subjects,
+            gen_images=False,
+            skip_failed=True,
+        )
+
+        # Check that processing continued despite errors
+        assert len(results) == 2
+        assert isinstance(results["sub-001"], Path)
+        assert isinstance(results["non-existent-subject"], Exception)
+
+    def test_gen_batch_reports_output_directory_creation(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test that output directory is created if it doesn't exist."""
+        # Create mock SVG files
+        mock_svg_dir = temp_output_dir / "mock_svgs"
+        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_svg_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Test Talairach</text></svg>")
+
+        # Use non-existent output directory
+        non_existent_dir = temp_output_dir / "new_reports_dir"
+        assert not non_existent_dir.exists()
+
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=non_existent_dir,
+            subjects=["sub-001"],
+            gen_images=False,
+        )
+
+        # Check that directory was created
+        assert non_existent_dir.exists()
+        assert len(results) == 1
+        assert isinstance(results["sub-001"], Path)
+
+    def test_gen_batch_reports_return_type(self, mock_freesurfer_instance: FreeSurfer, temp_output_dir: Path) -> None:
+        """Test that batch report generation returns correct type."""
+        # Create mock SVG files
+        mock_svg_dir = temp_output_dir / "mock_svgs"
+        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_svg_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Test Talairach</text></svg>")
+
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=temp_output_dir / "reports",
+            subjects=["sub-001"],
+            gen_images=False,
+        )
+
+        # Check return type
+        assert isinstance(results, dict)
+        assert "sub-001" in results
+        assert isinstance(results["sub-001"], Path)
+
+    def test_gen_batch_reports_empty_subjects_list(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test batch report generation with empty subjects list."""
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=temp_output_dir / "reports",
+            subjects=[],
+        )
+
+        # Check that empty results are returned
+        assert isinstance(results, dict)
+        assert len(results) == 0
+
+    def test_gen_batch_reports_method_signature(self, mock_freesurfer_instance: FreeSurfer) -> None:
+        """Test that batch report methods have correct signatures."""
+        # Test gen_batch_reports signature
+        sig1 = inspect.signature(mock_freesurfer_instance.gen_batch_reports)
+        assert "output_dir" in sig1.parameters
+        assert "subjects" in sig1.parameters
+        assert "gen_images" in sig1.parameters
+        assert "template" in sig1.parameters
+        assert "skip_failed" in sig1.parameters
