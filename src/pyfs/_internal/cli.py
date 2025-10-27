@@ -32,7 +32,7 @@ def get_parser() -> argparse.ArgumentParser:
 
     Returns
     -------
-        An argparse parser.
+    An argparse parser.
     """
     parser = argparse.ArgumentParser(prog="pyfs")
     parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {debug._get_version()}")
@@ -47,11 +47,11 @@ def main(args: list[str] | None = None) -> int:
 
     Parameters
     ----------
-        args: Arguments passed from the command line.
+    args: Arguments passed from the command line.
 
     Returns
     -------
-        An exit code.
+    An exit code.
     """
     parser = get_parser()
     opts = parser.parse_args(args=args)

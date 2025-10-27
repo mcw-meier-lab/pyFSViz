@@ -19,7 +19,6 @@ nav:
   - Changelog: changelog.md
   - Credits: credits.md
   - License: license.md
-- API reference: reference/api.md
 - Development:
   - Contributing: contributing.md
   - Code of Conduct: code_of_conduct.md
@@ -36,6 +35,7 @@ theme:
   - content.code.copy
   - content.tooltips
   - navigation.footer
+  - navigation.indexes
   - navigation.instant.preview
   - navigation.path
   - navigation.sections
@@ -66,6 +66,7 @@ theme:
       name: Switch to system preference
 
 extra_css:
+- css/colors.css
 - css/material.css
 - css/mkdocstrings.css
 
@@ -101,6 +102,13 @@ plugins:
 - markdown-exec
 - section-index
 - coverage
+- api-autonav:
+    modules: ["src/pyfs"]
+    module_options:
+      package.submodule:
+        docstring_style: numpy
+    nav_section_title: "API Reference"
+    api_root_uri: "autoapi/summary"
 - mkdocstrings:
     handlers:
       python:
@@ -112,10 +120,12 @@ plugins:
           docstring_options:
             ignore_init_summary: true
           docstring_section_style: list
+          docstring_style: "numpy"
           filters: ["!^_"]
           heading_level: 1
           inherited_members: true
           merge_init_into_class: true
+          parameter_headings: true
           separate_signature: true
           show_root_heading: true
           show_root_full_path: false
@@ -130,8 +140,6 @@ plugins:
     sections:
       Usage:
       - index.md
-      API:
-      - reference/api.md
 - git-revision-date-localized:
     enabled: !ENV [DEPLOY, false]
     enable_creation_date: true
@@ -143,23 +151,3 @@ plugins:
     plugins:
     - typeset
 
-extra:
-  social:
-  - icon: fontawesome/brands/github
-    link: https://github.com/l-espana
-  - icon: fontawesome/brands/gitter
-    link: https://gitter.im/pyFS/community
-  - icon: fontawesome/brands/python
-    link: https://pypi.org/project/pyfs/
-  analytics:
-    feedback:
-      title: Was this page helpful?
-      ratings:
-        - icon: material/emoticon-happy-outline
-          name: This page was helpful
-          data: 1
-          note: Thanks for your feedback!
-        - icon: material/emoticon-sad-outline
-          name: This page could be improved
-          data: 0
-          note: Let us know how we can improve this page.

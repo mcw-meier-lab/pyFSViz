@@ -29,7 +29,7 @@ def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColorma
     Parameters
     ----------
     freesurfer_home : path or str representing a path to a directory
-       Path corresponding to FREESURFER_HOME env var.
+        Path corresponding to FREESURFER_HOME env var.
 
     Returns
     -------
@@ -66,10 +66,10 @@ class FreeSurfer:
 
         Parameters
         ----------
-        freesurfer_home : path or str representing a path to a directory
-        Path corresponding to FREESURFER_HOME env var.
-        subjects_dir : path or str representing a path to a directory
-        Path corresponding to SUBJECTS_DIR env var.
+        freesurfer_home : str representing a path to a directory
+            Path corresponding to FREESURFER_HOME env var.
+        subjects_dir : str representing a path to a directory
+            Path corresponding to SUBJECTS_DIR env var.
         log_level : str
             Logging level (e.g., "INFO", "DEBUG", "WARNING").
             Default is "INFO".
