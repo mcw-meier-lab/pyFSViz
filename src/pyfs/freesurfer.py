@@ -82,11 +82,14 @@ class FreeSurfer:
         # Set up logger
         logging.basicConfig(level=getattr(logging, log_level.upper()))
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        """Logger for the FreeSurfer class."""
 
         if freesurfer_home is None:
             self.freesurfer_home = Path(os.environ.get("FREESURFER_HOME") or "")
+            """Path to the FreeSurfer home directory."""
         else:
             self.freesurfer_home = Path(freesurfer_home)
+            """Path to the FreeSurfer home directory."""
         if not self.freesurfer_home.exists():
             raise FileNotFoundError(f"FREESURFER_HOME not found: {self.freesurfer_home}")
         if self.freesurfer_home is None:
@@ -94,13 +97,17 @@ class FreeSurfer:
 
         if subjects_dir is None:
             self.subjects_dir = Path(os.environ.get("SUBJECTS_DIR") or "")
+            """Path to the subjects directory."""
         else:
             self.subjects_dir = Path(subjects_dir)
+            """Path to the subjects directory."""
         if not self.subjects_dir.exists():
             raise FileNotFoundError(f"SUBJECTS_DIR not found: {self.subjects_dir}")
-
-        self.mni_nii = files("pyfs._internal") / "mni305.cor.nii.gz"
-        self.mni_mgz = files("pyfs._internal") / "mni305.cor.mgz"
+        """Path to the subjects directory."""
+        self._mni_nii = files("pyfs._internal") / "mni305.cor.nii.gz"
+        """Path to the MNI template NIfTI file."""
+        self._mni_mgz = files("pyfs._internal") / "mni305.cor.mgz"
+        """Path to the MNI template MGH file."""
 
     def get_colormap(self) -> colors.ListedColormap:
         """Return the colormap for the FreeSurfer data."""
@@ -163,7 +170,7 @@ class FreeSurfer:
 
         # use FSL to convert template file to subject original space
         flirt = FLIRT(
-            in_file=self.mni_nii,
+            in_file=self._mni_nii,
             reference=f"{output_dir}/orig.nii.gz",
             out_file=f"{output_dir}/mni2orig.nii.gz",
             in_matrix_file=f"{output_dir}/inv.xfm",

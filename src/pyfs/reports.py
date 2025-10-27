@@ -28,8 +28,8 @@ class Template:
     """Simplified jinja2 template class from oesteban."""
 
     def __init__(self, template_str: str) -> None:
-        self.template_str = template_str
-        self.env = jinja2.Environment(
+        self._template_str = template_str
+        self._env = jinja2.Environment(
             loader=jinja2.FileSystemLoader(searchpath="/"),
             trim_blocks=True,
             lstrip_blocks=True,
@@ -38,7 +38,7 @@ class Template:
 
     def compile(self, configs: dict) -> str:
         """Generate a string with the replacements."""
-        template = self.env.get_template(self.template_str)
+        template = self._env.get_template(self._template_str)
         return template.render(configs)
 
     def generate_conf(self, configs: dict, path: str) -> None:

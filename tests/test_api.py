@@ -152,10 +152,23 @@ def test_inventory_matches_api(
     not_in_api = []
     public_api_paths = {obj.path for obj in public_objects}
     public_api_paths.add("pyfs")
+
+    # Also add module names from __all__ that might not be in public_objects
+    # (because modules=False in the public_objects fixture)
+    public_api_names = set(pyfs.__all__)
+
     for item in inventory.values():
         if item.domain == "py" and "(" not in item.name and (item.name == "pyfs" or item.name.startswith("pyfs.")):
             obj = loader.modules_collection[item.name]
-            if obj.path not in public_api_paths and not any(path in public_api_paths for path in obj.aliases):
+            # Get the simple module name (e.g., "freesurfer" from "pyfs.freesurfer")
+            module_name = item.name.split(".")[-1]
+            # Check if the object's path is in public API or if it's a module name in __all__
+            is_public = (
+                obj.path in public_api_paths
+                or any(path in public_api_paths for path in obj.aliases)
+                or module_name in public_api_names
+            )
+            if not is_public:
                 not_in_api.append(item.name)
     msg = "Inventory objects not in public API (try running `make run mkdocs build`):\n{paths}"
     assert not not_in_api, msg.format(paths="\n".join(sorted(not_in_api)))

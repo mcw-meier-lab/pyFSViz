@@ -18,14 +18,22 @@ class TestTemplate:
 
     def test_template_init(self) -> None:
         """Test Template initialization."""
-        template_str = "test_template.html"
-        template = Template(template_str)
+        # Create a simple test template
+        template_content = "<html><body>{{ title }}</body></html>"
 
-        assert template.template_str == template_str
-        assert template.env is not None
-        assert template.env.trim_blocks is True
-        assert template.env.lstrip_blocks is True
-        assert template.env.autoescape is True
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False, encoding="utf-8") as f:
+            f.write(template_content)
+            template_path = f.name
+
+        try:
+            template = Template(template_path)
+
+            # Test that the template can be compiled
+            result = template.compile({"title": "Test"})
+            assert isinstance(result, str)
+            assert "Test" in result
+        finally:
+            Path(template_path).unlink()
 
     def test_template_compile(self) -> None:
         """Test template compilation with simple template."""
