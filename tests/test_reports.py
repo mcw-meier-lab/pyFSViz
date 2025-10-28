@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from importlib_resources import files
 
-from pyfs.freesurfer import FreeSurfer
-from pyfs.reports import Template
+from pyfsviz.freesurfer import FreeSurfer
+from pyfsviz.reports import Template
 
 
 class TestTemplate:
@@ -496,7 +496,7 @@ class TestHTMLReportGeneration:
                 f.write(content)
 
         # Get the actual template path
-        actual_template = files("pyfs._internal.html") / "individual.html"
+        actual_template = files("pyfsviz._internal.html") / "individual.html"
 
         # Generate HTML report with actual template
         html_file = mock_freesurfer_instance.gen_html_report(

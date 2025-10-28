@@ -1,4 +1,4 @@
-target-version = "py39"
+target-version = "py310"
 line-length = 120
 
 [lint]
@@ -79,7 +79,7 @@ docstring-quotes = "double"
 ban-relative-imports = "all"
 
 [lint.isort]
-known-first-party = ["pyfs"]
+known-first-party = ["pyfsviz"]
 
 [lint.pydocstyle]
 convention = "numpy"

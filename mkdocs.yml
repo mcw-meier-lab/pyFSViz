@@ -1,10 +1,10 @@
-site_name: "pyFS"
+site_name: "pyFSViz"
 site_description: "Python tools for FreeSurfer visualization and QA"
-site_url: "https://mcw-meier-lab.github.io/pyFS"
-repo_url: "https://github.com/mcw-meier-lab/pyFS"
-repo_name: "mcw-meier-lab/pyFS"
+site_url: "https://mcw-meier-lab.github.io/pyFSViz"
+repo_url: "https://github.com/mcw-meier-lab/pyFSViz"
+repo_name: "mcw-meier-lab/pyFSViz"
 site_dir: "site"
-watch: [mkdocs.yml, README.md, CONTRIBUTING.md, CHANGELOG.md, src/pyfs]
+watch: [mkdocs.yml, README.md, CONTRIBUTING.md, CHANGELOG.md, src/pyfsviz]
 copyright: Copyright &copy; 2025 mcw-meier-lab
 edit_uri: edit/main/docs/
 
@@ -103,7 +103,7 @@ plugins:
 - section-index
 - coverage
 - api-autonav:
-    modules: ["src/pyfs"]
+    modules: ["src/pyfsviz"]
     module_options:
       package.submodule:
         docstring_style: numpy

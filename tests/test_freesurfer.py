@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from matplotlib import colors
 
-from pyfs.freesurfer import FreeSurfer, get_freesurfer_colormap
+from pyfsviz.freesurfer import FreeSurfer, get_freesurfer_colormap
 
 
 def test_get_colormap(mock_freesurfer_home: Path) -> None:

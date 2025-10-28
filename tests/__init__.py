@@ -1,4 +1,4 @@
-"""Tests suite for `pyfs`."""
+"""Tests suite for `pyfsviz`."""
 
 from pathlib import Path
 

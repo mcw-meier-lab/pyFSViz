@@ -1,4 +1,4 @@
-"""Entry-point module, in case you use `python -m pyfs`.
+"""Entry-point module, in case you use `python -m pyfsviz`.
 
 Why does this file exist, and why `__main__`? For more info, read:
 
@@ -8,7 +8,7 @@ Why does this file exist, and why `__main__`? For more info, read:
 
 import sys
 
-from pyfs._internal.cli import main
+from pyfsviz._internal.cli import main
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

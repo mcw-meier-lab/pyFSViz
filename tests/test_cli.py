@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from pyfs import main
-from pyfs._internal import debug
+from pyfsviz import main
+from pyfsviz._internal import debug
 
 
 def test_main() -> None:
@@ -23,7 +23,7 @@ def test_show_help(capsys: pytest.CaptureFixture) -> None:
     with pytest.raises(SystemExit):
         main(["-h"])
     captured = capsys.readouterr()
-    assert "pyfs" in captured.out
+    assert "pyfsviz" in captured.out
 
 
 def test_show_version(capsys: pytest.CaptureFixture) -> None:

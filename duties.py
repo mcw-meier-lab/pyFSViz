@@ -106,7 +106,7 @@ def check_types(ctx: Context) -> None:
 def check_api(ctx: Context, *cli_args: str) -> None:
     """Check for API breaking changes."""
     ctx.run(
-        tools.griffe.check("pyfs", search=["src"], color=True).add_args(*cli_args),
+        tools.griffe.check("pyfsviz", search=["src"], color=True).add_args(*cli_args),
         title="Checking for API breaking changes",
         nofail=True,
     )
@@ -208,9 +208,6 @@ def test(ctx: Context, *cli_args: str, match: str = "") -> None:  # noqa: PT028
     os.environ["COVERAGE_FILE"] = f".coverage.{PY_VERSION}"
     os.environ["PYTHONWARNDEFAULTENCODING"] = "1"
     config_file = "config/pytest.ini"
-    # YORE: EOL 3.9: Remove block.
-    if sys.version_info[:2] < (3, 10):
-        config_file = "config/pytest_39.ini"
 
     ctx.run(
         tools.pytest(

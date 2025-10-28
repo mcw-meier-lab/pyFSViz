@@ -10,7 +10,7 @@ import griffe
 import pytest
 from mkdocstrings import Inventory
 
-import pyfs
+import pyfsviz
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -19,19 +19,19 @@ if TYPE_CHECKING:
 @pytest.fixture(name="loader", scope="module")
 def _fixture_loader() -> griffe.GriffeLoader:
     loader = griffe.GriffeLoader()
-    loader.load("pyfs")
+    loader.load("pyfsviz")
     loader.resolve_aliases()
     return loader
 
 
 @pytest.fixture(name="internal_api", scope="module")
 def _fixture_internal_api(loader: griffe.GriffeLoader) -> griffe.Module:
-    return loader.modules_collection["pyfs._internal"]
+    return loader.modules_collection["pyfsviz._internal"]
 
 
 @pytest.fixture(name="public_api", scope="module")
 def _fixture_public_api(loader: griffe.GriffeLoader) -> griffe.Module:
-    return loader.modules_collection["pyfs"]
+    return loader.modules_collection["pyfsviz"]
 
 
 def _yield_public_objects(
@@ -97,9 +97,11 @@ def _fixture_inventory() -> Inventory:
 
 
 def test_exposed_objects(modulelevel_internal_objects: list[griffe.Object | griffe.Alias]) -> None:
-    """All public objects in the internal API are exposed under `pyfs`."""
+    """All public objects in the internal API are exposed under `pyfsviz`."""
     not_exposed = [
-        obj.path for obj in modulelevel_internal_objects if obj.name not in pyfs.__all__ or not hasattr(pyfs, obj.name)
+        obj.path
+        for obj in modulelevel_internal_objects
+        if obj.name not in pyfsviz.__all__ or not hasattr(pyfsviz, obj.name)
     ]
     assert not not_exposed, "Objects not exposed:\n" + "\n".join(sorted(not_exposed))
 
@@ -120,7 +122,7 @@ def test_single_locations(public_api: griffe.Module) -> None:
         return obj.is_public and (obj.parent is None or _public_path(obj.parent))
 
     multiple_locations = {}
-    for obj_name in pyfs.__all__:
+    for obj_name in pyfsviz.__all__:
         obj = public_api[obj_name]
         if obj.aliases and (
             public_aliases := [path for path, alias in obj.aliases.items() if path != obj.path and _public_path(alias)]
@@ -151,16 +153,20 @@ def test_inventory_matches_api(
     """The inventory doesn't contain any additional Python object."""
     not_in_api = []
     public_api_paths = {obj.path for obj in public_objects}
-    public_api_paths.add("pyfs")
+    public_api_paths.add("pyfsviz")
 
     # Also add module names from __all__ that might not be in public_objects
     # (because modules=False in the public_objects fixture)
-    public_api_names = set(pyfs.__all__)
+    public_api_names = set(pyfsviz.__all__)
 
     for item in inventory.values():
-        if item.domain == "py" and "(" not in item.name and (item.name == "pyfs" or item.name.startswith("pyfs.")):
+        if (
+            item.domain == "py"
+            and "(" not in item.name
+            and (item.name == "pyfsviz" or item.name.startswith("pyfsviz."))
+        ):
             obj = loader.modules_collection[item.name]
-            # Get the simple module name (e.g., "freesurfer" from "pyfs.freesurfer")
+            # Get the simple module name (e.g., "freesurfer" from "pyfsviz.freesurfer")
             module_name = item.name.split(".")[-1]
             # Check if the object's path is in public API or if it's a module name in __all__
             is_public = (

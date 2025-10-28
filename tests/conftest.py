@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from pyfs.freesurfer import FreeSurfer
+from pyfsviz.freesurfer import FreeSurfer
 from tests.test_data_generator import setup_mock_freesurfer_environment
 
 

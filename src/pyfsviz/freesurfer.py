@@ -17,7 +17,7 @@ from nipype.interfaces.freesurfer import MRIConvert
 from nipype.interfaces.fsl import FLIRT
 from nireports.interfaces.reporting.base import SimpleBeforeAfterRPT
 
-from pyfs.reports import Template
+from pyfsviz.reports import Template
 
 
 def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColormap:
@@ -104,9 +104,9 @@ class FreeSurfer:
         if not self.subjects_dir.exists():
             raise FileNotFoundError(f"SUBJECTS_DIR not found: {self.subjects_dir}")
         """Path to the subjects directory."""
-        self._mni_nii = files("pyfs._internal") / "mni305.cor.nii.gz"
+        self._mni_nii = files("pyfsviz._internal") / "mni305.cor.nii.gz"
         """Path to the MNI template NIfTI file."""
-        self._mni_mgz = files("pyfs._internal") / "mni305.cor.mgz"
+        self._mni_mgz = files("pyfsviz._internal") / "mni305.cor.mgz"
         """Path to the MNI template MGH file."""
 
     def get_colormap(self) -> colors.ListedColormap:
@@ -139,7 +139,7 @@ class FreeSurfer:
 
         Examples
         --------
-        >>> from pyfs.freesurfer import FreeSurfer
+        >>> from pyfsviz.freesurfer import FreeSurfer
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
@@ -207,7 +207,7 @@ class FreeSurfer:
 
         Examples
         --------
-        >>> from pyfs.freesurfer import FreeSurfer
+        >>> from pyfsviz.freesurfer import FreeSurfer
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
@@ -254,7 +254,7 @@ class FreeSurfer:
 
         Examples
         --------
-        >>> from pyfs.freesurfer import FreeSurfer
+        >>> from pyfsviz.freesurfer import FreeSurfer
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
@@ -316,7 +316,7 @@ class FreeSurfer:
 
         Examples
         --------
-        >>> from pyfs.freesurfer import FreeSurfer
+        >>> from pyfsviz.freesurfer import FreeSurfer
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
@@ -445,7 +445,7 @@ class FreeSurfer:
 
         Examples
         --------
-        >>> from pyfs.freesurfer import FreeSurfer
+        >>> from pyfsviz.freesurfer import FreeSurfer
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
@@ -454,7 +454,7 @@ class FreeSurfer:
         >>> report = fs_dir.gen_html_report(out_name="sub-001.html", output_dir=".")
         """
         if template is None:
-            template = files("pyfs._internal.html") / "individual.html"
+            template = files("pyfsviz._internal.html") / "individual.html"
         if img_out is None:
             image_list = list((self.subjects_dir / subject).glob("*/*svg"))
         else:
@@ -534,7 +534,7 @@ class FreeSurfer:
 
         Examples
         --------
-        >>> from pyfs.freesurfer import FreeSurfer
+        >>> from pyfsviz.freesurfer import FreeSurfer
         >>> fs = FreeSurfer()
         >>> results = fs.gen_batch_reports("reports/", log_level="INFO")
         >>> for subject, result in results.items():

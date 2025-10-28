@@ -10,7 +10,6 @@ from importlib.metadata import distributions
 from itertools import chain
 from pathlib import Path
 from textwrap import dedent
-from typing import Union
 
 from jinja2 import StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
@@ -29,7 +28,7 @@ project = pyproject["project"]
 project_name = project["name"]
 devdeps = [dep for group in pyproject["dependency-groups"].values() for dep in group if not dep.startswith("-e")]
 
-PackageMetadata = dict[str, Union[str, Iterable[str]]]
+PackageMetadata = dict[str, str | Iterable[str]]
 Metadata = dict[str, PackageMetadata]
 
 
@@ -88,7 +87,7 @@ def _set_license(metadata: PackageMetadata) -> None:
 def _get_deps(base_deps: dict[str, Requirement], metadata: Metadata) -> Metadata:
     deps = {}
     for dep_name, dep_req in base_deps.items():
-        if dep_name not in metadata or dep_name == "pyfs":
+        if dep_name not in metadata or dep_name == "pyfsviz":
             continue
         metadata[dep_name]["spec"] |= {str(spec) for spec in dep_req.specifier}  # type: ignore[operator]
         metadata[dep_name]["extras"] |= dep_req.extras  # type: ignore[operator]

@@ -9,7 +9,7 @@ Nothing easier!
 Fork and clone the repository, then:
 
 ```bash
-cd pyFS
+cd pyFSViz
 make setup
 ```
 
@@ -25,7 +25,7 @@ make setup
 
 You now have the dependencies installed.
 
-You can run the application with `make run pyfs [ARGS...]`.
+You can run the application with `make run pyfsviz [ARGS...]`.
 
 Run `make help` to see all the available actions!
 
