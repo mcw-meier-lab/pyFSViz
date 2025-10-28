@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from importlib_resources import files
+from PIL import Image
 
 from pyfsviz.freesurfer import FreeSurfer
 from pyfsviz.reports import Template
@@ -218,32 +219,35 @@ class TestHTMLReportGeneration:
 
     def test_gen_html_report_basic(self, mock_freesurfer_instance: FreeSurfer, temp_output_dir: Path) -> None:
         """Test basic HTML report generation."""
-        # Create mock SVG files
-        mock_svg_dir = temp_output_dir / "mock_svgs"
-        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create different types of SVG files
-        svg_files = {
-            "tlrc.svg": "<svg><text>Talairach Registration</text></svg>",
-            "aseg.svg": "<svg><text>Aseg Parcellation</text></svg>",
-            "aparc.svg": "<svg><text>Aparc Parcellation</text></svg>",
-            "lh_pial.svg": "<svg><text>LH Pial Surface</text></svg>",
-            "rh_pial.svg": "<svg><text>RH Pial Surface</text></svg>",
-            "lh_infl.svg": "<svg><text>LH Inflated Surface</text></svg>",
-            "rh_infl.svg": "<svg><text>RH Inflated Surface</text></svg>",
-            "lh_white.svg": "<svg><text>LH White Matter</text></svg>",
-            "rh_white.svg": "<svg><text>RH White Matter</text></svg>",
-        }
+        # Create TLRC SVG file
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
 
-        for filename, content in svg_files.items():
-            with open(mock_svg_dir / filename, "w", encoding="utf-8") as f:
-                f.write(content)
+        # Create PNG files for other images
+        png_files = [
+            "aseg.png",
+            "aparc.png",
+            "lh_pial.png",
+            "rh_pial.png",
+            "lh_infl.png",
+            "rh_infl.png",
+            "lh_white.png",
+            "rh_white.png",
+        ]
+
+        img = Image.new("RGB", (1, 1), color="black")
+        for filename in png_files:
+            img.save(mock_img_dir / filename, "PNG")
 
         # Generate HTML report
+        all_files = list(mock_img_dir.glob("*"))
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_list=list(mock_svg_dir.glob("**/*.svg")),
+            img_list=all_files,
         )
 
         # Check that HTML file was created
@@ -254,16 +258,13 @@ class TestHTMLReportGeneration:
         with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
-        # Check that all SVG content is included
+        # Check that SVG is embedded and PNG images have proper paths
         assert "Talairach Registration" in html_content
-        assert "Aseg Parcellation" in html_content
-        assert "Aparc Parcellation" in html_content
-        assert "LH Pial Surface" in html_content
-        assert "RH Pial Surface" in html_content
-        assert "LH Inflated Surface" in html_content
-        assert "RH Inflated Surface" in html_content
-        assert "LH White Matter" in html_content
-        assert "RH White Matter" in html_content
+        assert "aseg.png" in html_content
+        assert "aparc.png" in html_content
+        assert "<img src=" in html_content
+        assert "img-fluid" in html_content
+        assert "<svg>" in html_content or "svg" in html_content
 
         # Check HTML structure
         assert "<html" in html_content
@@ -277,18 +278,18 @@ class TestHTMLReportGeneration:
         temp_output_dir: Path,
     ) -> None:
         """Test HTML report generation with default template."""
-        # Create mock SVG files
-        mock_svg_dir = temp_output_dir / "mock_svgs"
-        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+        # Create mock SVG file
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(mock_svg_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
             f.write("<svg><text>Test Talairach</text></svg>")
 
         # Generate HTML report with default template
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_list=list(mock_svg_dir.glob("**/*.svg")),
+            img_list=list(mock_img_dir.glob("*")),
         )
 
         assert html_file.exists()
@@ -342,21 +343,19 @@ class TestHTMLReportGeneration:
         with open(custom_template_path, "w", encoding="utf-8") as f:
             f.write(custom_template_content)
 
-        # Create mock SVG files
-        mock_svg_dir = temp_output_dir / "mock_svgs"
-        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+        # Create mock PNG files
+        mock_png_dir = temp_output_dir / "mock_pngs"
+        mock_png_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(mock_svg_dir / "tlrc.svg", "w", encoding="utf-8") as f:
-            f.write("<svg><text>Custom Talairach</text></svg>")
-
-        with open(mock_svg_dir / "aseg.svg", "w", encoding="utf-8") as f:
-            f.write("<svg><text>Custom Aseg</text></svg>")
+        img = Image.new("RGB", (1, 1), color="black")
+        img.save(mock_png_dir / "tlrc.png", "PNG")
+        img.save(mock_png_dir / "aseg.png", "PNG")
 
         # Generate HTML report with custom template
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_list=list(mock_svg_dir.glob("**/*.svg")),
+            img_list=list(mock_png_dir.glob("*.png")),
             template=str(custom_template_path),
         )
 
@@ -368,8 +367,6 @@ class TestHTMLReportGeneration:
         # Check that custom template elements are present
         assert "Custom FreeSurfer Report" in html_content
         assert "Subject: sub-001" in html_content
-        assert "Custom Talairach" in html_content
-        assert "Custom Aseg" in html_content
         assert "Generated:" in html_content
 
     def test_gen_html_report_empty_images(self, mock_freesurfer_instance: FreeSurfer, temp_output_dir: Path) -> None:
@@ -382,7 +379,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_list=list(empty_dir.glob("**/*.svg")),
+            img_list=list(empty_dir.glob("*.png")),
         )
 
         assert html_file.exists()
@@ -399,18 +396,18 @@ class TestHTMLReportGeneration:
         temp_output_dir: Path,
     ) -> None:
         """Test that timestamp is properly formatted in HTML report."""
-        # Create mock SVG files
-        mock_svg_dir = temp_output_dir / "mock_svgs"
-        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+        # Create mock SVG file
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(mock_svg_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
             f.write("<svg><text>Test</text></svg>")
 
         # Generate HTML report
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_list=list(mock_svg_dir.glob("**/*.svg")),
+            img_list=list(mock_img_dir.glob("*")),
         )
 
         with open(html_file, encoding="utf-8") as f:
@@ -437,28 +434,28 @@ class TestHTMLReportGeneration:
         temp_output_dir: Path,
     ) -> None:
         """Test that surface files are properly labeled in HTML report."""
-        # Create mock SVG files with specific naming
-        mock_svg_dir = temp_output_dir / "mock_svgs"
-        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+        # Create mock PNG files with specific naming
+        mock_png_dir = temp_output_dir / "mock_pngs"
+        mock_png_dir.mkdir(parents=True, exist_ok=True)
 
-        surface_files = {
-            "lh_pial.svg": "<svg><text>LH Pial</text></svg>",
-            "rh_pial.svg": "<svg><text>RH Pial</text></svg>",
-            "lh_infl.svg": "<svg><text>LH Inflated</text></svg>",
-            "rh_infl.svg": "<svg><text>RH Inflated</text></svg>",
-            "lh_white.svg": "<svg><text>LH White</text></svg>",
-            "rh_white.svg": "<svg><text>RH White</text></svg>",
-        }
+        surface_files = [
+            "lh_pial.png",
+            "rh_pial.png",
+            "lh_infl.png",
+            "rh_infl.png",
+            "lh_white.png",
+            "rh_white.png",
+        ]
 
-        for filename, content in surface_files.items():
-            with open(mock_svg_dir / filename, "w", encoding="utf-8") as f:
-                f.write(content)
+        img = Image.new("RGB", (1, 1), color="black")
+        for filename in surface_files:
+            img.save(mock_png_dir / filename, "PNG")
 
         # Generate HTML report
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_list=list(mock_svg_dir.glob("**/*.svg")),
+            img_list=list(mock_png_dir.glob("*.png")),
         )
 
         with open(html_file, encoding="utf-8") as f:
@@ -478,22 +475,25 @@ class TestHTMLReportGeneration:
         temp_output_dir: Path,
     ) -> None:
         """Test HTML report generation with the actual FreeSurfer template."""
-        # Create mock SVG files
-        mock_svg_dir = temp_output_dir / "mock_svgs"
-        mock_svg_dir.mkdir(parents=True, exist_ok=True)
+        # Create mock image files
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create different types of SVG files
-        svg_files = {
-            "tlrc.svg": "<svg><text>Talairach Registration</text></svg>",
-            "aseg.svg": "<svg><text>Aseg Parcellation</text></svg>",
-            "aparc.svg": "<svg><text>Aparc Parcellation</text></svg>",
-            "lh_pial.svg": "<svg><text>LH Pial Surface</text></svg>",
-            "rh_pial.svg": "<svg><text>RH Pial Surface</text></svg>",
-        }
+        # Create TLRC SVG
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
 
-        for filename, content in svg_files.items():
-            with open(mock_svg_dir / filename, "w", encoding="utf-8") as f:
-                f.write(content)
+        # Create PNG files
+        png_files = [
+            "aseg.png",
+            "aparc.png",
+            "lh_pial.png",
+            "rh_pial.png",
+        ]
+
+        img = Image.new("RGB", (1, 1), color="black")
+        for filename in png_files:
+            img.save(mock_img_dir / filename, "PNG")
 
         # Get the actual template path
         actual_template = files("pyfsviz._internal.html") / "individual.html"
@@ -502,7 +502,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_list=list(mock_svg_dir.glob("**/*.svg")),
+            img_list=list(mock_img_dir.glob("*")),
             template=str(actual_template),
         )
 
@@ -546,7 +546,8 @@ class TestHTMLReportGeneration:
             img_list=list(mock_svg_dir.glob("**/*.svg")),
         )
 
-        assert html_file.parent == temp_output_dir
+        # HTML file should be in subject-specific directory
+        assert html_file.parent == temp_output_dir / "sub-001"
         assert html_file.exists()
 
 

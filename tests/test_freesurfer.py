@@ -50,12 +50,12 @@ def test_gen_aparcaseg_plots(freesurfer: FreeSurfer, temp_output_dir: str) -> No
     """Test aparc and aseg plotting."""
     plots = freesurfer.gen_aparcaseg_plots("sub-001", temp_output_dir)
     assert len(plots) == 2
-    assert (Path(temp_output_dir) / "aseg.svg").exists()
-    assert (Path(temp_output_dir) / "aseg.svg").is_file()
-    assert (Path(temp_output_dir) / "aseg.svg").suffix == ".svg"
-    assert (Path(temp_output_dir) / "aparc.svg").exists()
-    assert (Path(temp_output_dir) / "aparc.svg").is_file()
-    assert (Path(temp_output_dir) / "aparc.svg").suffix == ".svg"
+    assert (Path(temp_output_dir) / "aseg.png").exists()
+    assert (Path(temp_output_dir) / "aseg.png").is_file()
+    assert (Path(temp_output_dir) / "aseg.png").suffix == ".png"
+    assert (Path(temp_output_dir) / "aparc.png").exists()
+    assert (Path(temp_output_dir) / "aparc.png").is_file()
+    assert (Path(temp_output_dir) / "aparc.png").suffix == ".png"
 
 
 @pytest.mark.skip(reason="Surface plotting requires complex FreeSurfer file formats - needs improvement")
@@ -66,7 +66,7 @@ def test_gen_surf_plots(freesurfer: FreeSurfer, temp_output_dir: str) -> None:
     for plot in plots:
         assert plot.exists()
         assert plot.is_file()
-        assert plot.suffix == ".svg"
+        assert plot.suffix == ".png"
 
 
 def test_gen_surf_plots_basic(freesurfer: FreeSurfer) -> None:

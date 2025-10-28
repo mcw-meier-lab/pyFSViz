@@ -84,29 +84,33 @@ div#accordionOther {
 </div>
 
 <h2 id="tlrc" class="mt-5 mb-2">Talairach Registration</h2>
-{% for tag in tlrc %}
+{% for item in tlrc %}
     <div class="card mt-2">
         <div id="report-tlrc" class="card-body">
-        {{ tag }}
+        {% if '<svg' in item or '<?xml' in item %}
+        {{ item|safe }}
+        {% else %}
+        <img src="{{ item }}" alt="Talairach Registration" class="img-fluid" style="width: 100%;" />
+        {% endif %}
         </div>
     </div>
 {% endfor %}
 
 <h2 id="aseg" class="mt-5 mb-2">Aparc+Aseg Parcellations</h2>
-{% for tag in aseg %}
+{% for img_path in aseg %}
     <div class="card mt-2">
         <div id="report-aseg" class="card-body">
-        {{ tag }}
+        <img src="{{ img_path }}" alt="Aparc+Aseg Parcellations" class="img-fluid" style="width: 100%;" />
         </div>
     </div>
 {% endfor %}
 
 <h2 id="surf" class="mt-5 mb-2">Surfaces</h2>
-{% for label, tag in surf %}
+{% for label, img_path in surf %}
     <div class="card mt-2">
         <h4 id="surf" class="mt-5 mb-2">{{ label }}</h4>
         <div id="report-{{ label }}" class="card-body">
-        {{ tag }}
+        <img src="{{ img_path }}" alt="{{ label }}" class="img-fluid" style="width: 100%;" />
         </div>
     </div>
 {% endfor %}

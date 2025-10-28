@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -250,7 +251,7 @@ class FreeSurfer:
         Returns
         -------
         list
-            List of SVG image paths
+            List of PNG image paths
 
         Examples
         --------
@@ -276,7 +277,7 @@ class FreeSurfer:
             dim=-1,
             cut_coords=num_imgs,
             alpha=0.5,
-            output_file=f"{output_dir}/aseg.svg",
+            output_file=f"{output_dir}/aseg.png",
         )
         display = plotting.plot_anat(
             f"{mri_dir}/brainmask.mgz",
@@ -296,10 +297,10 @@ class FreeSurfer:
             linewidths=0.5,
             levels=[0.5],
         )
-        display.savefig(f"{output_dir}/aparc.svg")
+        display.savefig(f"{output_dir}/aparc.png")
         display.close()
 
-        return [Path(f"{output_dir}/aseg.svg"), Path(f"{output_dir}/aparc.svg")]
+        return [Path(f"{output_dir}/aseg.png"), Path(f"{output_dir}/aparc.png")]
 
     def gen_surf_plots(self, subject: str, output_dir: str) -> list[Path]:
         """Generate pial, inflated, and sulcal images from various viewpoints.
@@ -312,7 +313,7 @@ class FreeSurfer:
         Returns
         -------
         list[Path]:
-            List of generated SVG images
+            List of generated PNG images
 
         Examples
         --------
@@ -413,10 +414,10 @@ class FreeSurfer:
                     figure=fig,
                 )
 
-                plt.savefig(f"{output_dir}/{key}_{label}.svg", dpi=300, format="svg")
+                plt.savefig(f"{output_dir}/{key}_{label}.png", dpi=300, format="png")
                 plt.close()
 
-        return sorted(Path(output_dir).glob("*svg"))
+        return sorted(Path(output_dir).glob("*.png"))
 
     def gen_html_report(
         self,
@@ -434,7 +435,7 @@ class FreeSurfer:
         output_dir : str
             HTML file name
         img_list : list[Path] | None
-            List of SVG image paths.
+            List of image paths (PNG format).
         template : str | None
             HTML template to use. Default is local freesurfer.html.
 
@@ -456,20 +457,30 @@ class FreeSurfer:
         if template is None:
             template = files("pyfsviz._internal.html") / "individual.html"
         if img_list is None:
-            img_list = list((self.subjects_dir / subject).glob("**/*svg"))
+            img_list = list((self.subjects_dir / subject).glob("**/*.{png,svg}"))
 
         tlrc = []
         aseg = []
         surf = []
 
-        for img in img_list:
-            with open(img, encoding="utf-8") as img_file:
-                img_data = img_file.read()
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
 
-            if "tlrc" in img.name:
-                tlrc.append(img_data)
+        # Subject-specific directory
+        subject_dir = output_path / subject
+        subject_dir.mkdir(parents=True, exist_ok=True)
+
+        for img in img_list:
+            if "tlrc" in img.name and img.suffix == ".svg":
+                # Read SVG content directly for embedding
+                with open(img, encoding="utf-8") as f:
+                    svg_content = f.read()
+                tlrc.append(svg_content)
+            # Images are already in the subject directory, just reference by filename
+            elif "tlrc" in img.name:
+                tlrc.append(img.name)
             elif "aseg" in img.name or "aparc" in img.name:
-                aseg.append(img_data)
+                aseg.append(img.name)
             else:
                 labels = {
                     "lh_pial": "LH Pial",
@@ -479,7 +490,8 @@ class FreeSurfer:
                     "lh_white": "LH White Matter",
                     "rh_white": "RH White Matter",
                 }
-                surf_tuple = (labels[img.stem], img_data)
+                surface_type = img.stem
+                surf_tuple = (labels.get(surface_type, surface_type), img.name)
                 surf.append(surf_tuple)
 
         _config = {
@@ -490,10 +502,12 @@ class FreeSurfer:
             "surf": surf,
         }
 
+        # Save HTML file in subject directory
+        html_file = subject_dir / f"{subject}.html"
         tpl = Template(str(template))
-        tpl.generate_conf(_config, f"{output_dir}/{subject}.html")
+        tpl.generate_conf(_config, str(html_file))
 
-        return Path(output_dir) / f"{subject}.html"
+        return html_file
 
     def gen_batch_reports(
         self,
@@ -570,25 +584,33 @@ class FreeSurfer:
                 img_list = []
                 if gen_images:
                     # Generate TLRC data and report
-                    tlrc_dir = subject_output_dir / "tlrc"
-                    tlrc_dir.mkdir(parents=True, exist_ok=True)
-                    self.gen_tlrc_data(subject, str(tlrc_dir))
-                    tlrc = self.gen_tlrc_report(subject, str(tlrc_dir))
-                    img_list.append(tlrc)
+                    # Use a temporary subdirectory for intermediate files
+                    temp_tlrc_dir = subject_output_dir / "tlrc_temp"
+                    temp_tlrc_dir.mkdir(exist_ok=True)
 
-                    # Generate aparc+aseg plots
-                    aparc_dir = subject_output_dir / "aparcaseg"
-                    aparc_dir.mkdir(parents=True, exist_ok=True)
-                    aparcaseg = self.gen_aparcaseg_plots(subject, str(aparc_dir))
+                    self.gen_tlrc_data(subject, str(temp_tlrc_dir))
+                    tlrc = self.gen_tlrc_report(subject, str(temp_tlrc_dir))
+
+                    # Move tlrc.svg to subject directory
+                    if tlrc.exists():
+                        new_tlrc_path = subject_output_dir / "tlrc.svg"
+                        tlrc.rename(new_tlrc_path)
+                        img_list.append(new_tlrc_path)
+                    else:
+                        img_list.append(tlrc)
+
+                    # Clean up intermediate files
+                    shutil.rmtree(temp_tlrc_dir, ignore_errors=True)
+
+                    # Generate aparc+aseg plots - save directly to subject directory
+                    aparcaseg = self.gen_aparcaseg_plots(subject, str(subject_output_dir))
                     img_list.extend(aparcaseg)
 
-                    # Generate surface plots
-                    surf_dir = subject_output_dir / "surfaces"
-                    surf_dir.mkdir(parents=True, exist_ok=True)
-                    surf = self.gen_surf_plots(subject, str(surf_dir))
+                    # Generate surface plots - save directly to subject directory
+                    surf = self.gen_surf_plots(subject, str(subject_output_dir))
                     img_list.extend(surf)
                 else:
-                    img_list = list((self.subjects_dir / subject).glob("**/*svg"))
+                    img_list = list(subject_output_dir.glob("**/*.{png,svg}"))
 
                 # Generate HTML report using all generated images
                 html_file = self.gen_html_report(
