@@ -89,7 +89,7 @@ def test_gen_html_report_basic(freesurfer: FreeSurfer) -> None:
     sig = inspect.signature(freesurfer.gen_html_report)
     assert "subject" in sig.parameters
     assert "output_dir" in sig.parameters
-    assert "img_out" in sig.parameters
+    assert "img_list" in sig.parameters
     assert "template" in sig.parameters
 
 
@@ -117,7 +117,7 @@ def test_gen_html_report(freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
     html_file = freesurfer.gen_html_report(
         subject="sub-001",
         output_dir=str(temp_output_dir),
-        img_out=str(mock_svg_dir),
+        img_list=list(mock_svg_dir.glob("**/*.svg")),
     )
 
     # Check that HTML file was created

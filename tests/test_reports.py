@@ -243,7 +243,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_out=str(mock_svg_dir),
+            img_list=list(mock_svg_dir.glob("**/*.svg")),
         )
 
         # Check that HTML file was created
@@ -288,7 +288,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_out=str(mock_svg_dir),
+            img_list=list(mock_svg_dir.glob("**/*.svg")),
         )
 
         assert html_file.exists()
@@ -356,7 +356,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_out=str(mock_svg_dir),
+            img_list=list(mock_svg_dir.glob("**/*.svg")),
             template=str(custom_template_path),
         )
 
@@ -382,7 +382,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_out=str(empty_dir),
+            img_list=list(empty_dir.glob("**/*.svg")),
         )
 
         assert html_file.exists()
@@ -410,7 +410,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_out=str(mock_svg_dir),
+            img_list=list(mock_svg_dir.glob("**/*.svg")),
         )
 
         with open(html_file, encoding="utf-8") as f:
@@ -458,7 +458,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_out=str(mock_svg_dir),
+            img_list=list(mock_svg_dir.glob("**/*.svg")),
         )
 
         with open(html_file, encoding="utf-8") as f:
@@ -502,7 +502,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_out=str(mock_svg_dir),
+            img_list=list(mock_svg_dir.glob("**/*.svg")),
             template=str(actual_template),
         )
 
@@ -543,7 +543,7 @@ class TestHTMLReportGeneration:
         html_file = mock_freesurfer_instance.gen_html_report(
             subject="sub-001",
             output_dir=str(temp_output_dir),
-            img_out=str(mock_svg_dir),
+            img_list=list(mock_svg_dir.glob("**/*.svg")),
         )
 
         assert html_file.parent == temp_output_dir

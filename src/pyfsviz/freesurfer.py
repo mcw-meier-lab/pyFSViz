@@ -422,7 +422,7 @@ class FreeSurfer:
         self,
         subject: str,
         output_dir: str,
-        img_out: str | None = None,
+        img_list: list[Path] | None = None,
         template: str | None = None,
     ) -> Path:
         """Generate html report with FreeSurfer images.
@@ -433,8 +433,8 @@ class FreeSurfer:
             Subject ID.
         output_dir : str
             HTML file name
-        img_out : str | None
-            Location where SVG images are saved, default is subject's data directory.
+        img_list : list[Path] | None
+            List of SVG image paths.
         template : str | None
             HTML template to use. Default is local freesurfer.html.
 
@@ -455,16 +455,14 @@ class FreeSurfer:
         """
         if template is None:
             template = files("pyfsviz._internal.html") / "individual.html"
-        if img_out is None:
-            image_list = list((self.subjects_dir / subject).glob("*/*svg"))
-        else:
-            image_list = list(Path(img_out).glob("*svg"))
+        if img_list is None:
+            img_list = list((self.subjects_dir / subject).glob("**/*svg"))
 
         tlrc = []
         aseg = []
         surf = []
 
-        for img in image_list:
+        for img in img_list:
             with open(img, encoding="utf-8") as img_file:
                 img_data = img_file.read()
 
@@ -569,28 +567,34 @@ class FreeSurfer:
                 # Generate images
                 self.logger.info(f"  Generating images for {subject}...")
 
+                img_list = []
                 if gen_images:
                     # Generate TLRC data and report
                     tlrc_dir = subject_output_dir / "tlrc"
                     tlrc_dir.mkdir(parents=True, exist_ok=True)
                     self.gen_tlrc_data(subject, str(tlrc_dir))
-                    self.gen_tlrc_report(subject, str(tlrc_dir))
+                    tlrc = self.gen_tlrc_report(subject, str(tlrc_dir))
+                    img_list.append(tlrc)
 
                     # Generate aparc+aseg plots
                     aparc_dir = subject_output_dir / "aparcaseg"
                     aparc_dir.mkdir(parents=True, exist_ok=True)
-                    self.gen_aparcaseg_plots(subject, str(aparc_dir))
+                    aparcaseg = self.gen_aparcaseg_plots(subject, str(aparc_dir))
+                    img_list.extend(aparcaseg)
 
                     # Generate surface plots
                     surf_dir = subject_output_dir / "surfaces"
                     surf_dir.mkdir(parents=True, exist_ok=True)
-                    self.gen_surf_plots(subject, str(surf_dir))
+                    surf = self.gen_surf_plots(subject, str(surf_dir))
+                    img_list.extend(surf)
+                else:
+                    img_list = list((self.subjects_dir / subject).glob("**/*svg"))
 
                 # Generate HTML report using all generated images
                 html_file = self.gen_html_report(
                     subject=subject,
                     output_dir=str(output_dir),
-                    img_out=str(subject_output_dir),
+                    img_list=img_list,
                     template=template,
                 )
 
