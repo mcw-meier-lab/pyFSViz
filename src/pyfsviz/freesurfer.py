@@ -589,7 +589,7 @@ class FreeSurfer:
                     temp_tlrc_dir.mkdir(exist_ok=True)
 
                     self.gen_tlrc_data(subject, str(temp_tlrc_dir))
-                    tlrc = self.gen_tlrc_report(subject, str(temp_tlrc_dir))
+                    tlrc = Path(self.gen_tlrc_report(subject, str(temp_tlrc_dir)))
 
                     # Move tlrc.svg to subject directory
                     if tlrc.exists():
