@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.1.5](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.1.5) - 2025-10-28
+
+<small>[Compare with 0.1.4](https://github.com/mcw-meier-lab/pyFSViz/compare/0.1.4...0.1.5)</small>
+
+### Bug Fixes
+
+- tlrc path ([60425d2](https://github.com/mcw-meier-lab/pyFSViz/commit/60425d2805a4a404590c8452797f48fe4866b566) by Lezlie Espana).
+
 ## [0.1.4](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.1.4) - 2025-10-28
 
 <small>[Compare with 0.1.3](https://github.com/mcw-meier-lab/pyFSViz/compare/0.1.3...0.1.4)</small>
