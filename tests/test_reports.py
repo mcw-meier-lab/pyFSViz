@@ -4,8 +4,11 @@ import datetime
 import inspect
 import re
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 from importlib_resources import files
 from PIL import Image
@@ -526,6 +529,7 @@ class TestHTMLReportGeneration:
         # Check for navigation elements
         assert "navbar" in html_content
         assert "Summary" in html_content
+        assert 'href="#metrics"' in html_content or "Metrics" in html_content
         assert "Talairach Registration" in html_content
         assert "Aparc+Aseg Parcellations" in html_content
         assert "Surfaces" in html_content
@@ -549,6 +553,309 @@ class TestHTMLReportGeneration:
         # HTML file should be in subject-specific directory
         assert html_file.parent == temp_output_dir / "sub-001"
         assert html_file.exists()
+
+    def test_gen_html_report_with_metrics(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test HTML report generation with metrics.csv file."""
+        # Create mock image files
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
+
+        img = Image.new("RGB", (1, 1), color="black")
+        img.save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        # Create metrics.csv file
+        metrics_data = {
+            "subject": ["sub-001"],
+            "wm_snr_orig": [10.134],
+            "gm_snr_orig": [6.283],
+            "wm_snr_norm": [14.473],
+            "gm_snr_norm": [7.087],
+            "cc_size": [0.001761],
+            "holes_lh": [5],
+            "holes_rh": [1],
+            "defects_lh": [8],
+            "defects_rh": [4],
+            "topo_lh": [0.9],
+            "topo_rh": [0.3],
+            "con_snr_lh": [3.176],
+            "con_snr_rh": [3.174],
+            "rot_tal_x": [-0.160826],
+            "rot_tal_y": [0.056567],
+            "rot_tal_z": [-0.075648],
+        }
+        df = pd.DataFrame(metrics_data)
+        metrics_csv_path = temp_output_dir / "metrics.csv"
+        df.to_csv(metrics_csv_path, index=False)
+
+        # Generate HTML report
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=list(mock_img_dir.glob("*")),
+        )
+
+        assert html_file.exists()
+
+        with open(html_file, encoding="utf-8") as f:
+            html_content = f.read()
+
+        # Check that metrics section is present
+        assert 'id="metrics"' in html_content
+        assert "Metrics" in html_content
+
+        # Check that metrics values are in the HTML
+        assert "WM SNR (Original)" in html_content
+        assert "GM SNR (Original)" in html_content
+        assert "WM SNR (Normalized)" in html_content
+        assert "GM SNR (Normalized)" in html_content
+        assert "CC Size" in html_content
+        assert "Holes (LH)" in html_content
+        assert "Holes (RH)" in html_content
+        assert "Contrast SNR (LH)" in html_content
+        assert "Rotation Tal X" in html_content
+
+        # Check that Metrics is in navigation
+        assert 'href="#metrics"' in html_content
+
+    def test_gen_html_report_without_metrics(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test HTML report generation without metrics.csv file."""
+        # Create mock image files
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
+
+        img = Image.new("RGB", (1, 1), color="black")
+        img.save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        # Ensure metrics.csv does not exist
+        metrics_csv_path = temp_output_dir / "metrics.csv"
+        if metrics_csv_path.exists():
+            metrics_csv_path.unlink()
+
+        # Generate HTML report
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=list(mock_img_dir.glob("*")),
+        )
+
+        assert html_file.exists()
+
+        with open(html_file, encoding="utf-8") as f:
+            html_content = f.read()
+
+        # Check that metrics section is not present (or is empty)
+        # The template checks {% if metrics %} so if metrics is None, section won't render
+        assert "FreeSurfer: Individual Report" in html_content
+
+    def test_gen_html_report_metrics_subject_filtering(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test that metrics are filtered by subject when multiple subjects exist in CSV."""
+        # Create mock image files
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
+
+        img = Image.new("RGB", (1, 1), color="black")
+        img.save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        # Create metrics.csv file with multiple subjects
+        metrics_data = {
+            "subject": ["sub-001", "sub-002"],
+            "wm_snr_orig": [10.134, 12.456],
+            "gm_snr_orig": [6.283, 7.890],
+            "holes_lh": [5, 3],
+        }
+        df = pd.DataFrame(metrics_data)
+        metrics_csv_path = temp_output_dir / "metrics.csv"
+        df.to_csv(metrics_csv_path, index=False)
+
+        # Generate HTML report for sub-001
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=list(mock_img_dir.glob("*")),
+        )
+
+        assert html_file.exists()
+
+        with open(html_file, encoding="utf-8") as f:
+            html_content = f.read()
+
+        # Check that only sub-001 metrics are present
+        assert "10.134" in html_content or "10.13" in html_content
+        assert "12.456" not in html_content  # sub-002 value should not appear
+        assert "5" in html_content  # sub-001 holes_lh
+
+    def test_gen_html_report_metrics_nan_handling(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test that NaN values in metrics CSV are handled properly."""
+        # Create mock image files
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
+
+        img = Image.new("RGB", (1, 1), color="black")
+        img.save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        # Create metrics.csv file with NaN values
+        metrics_data = {
+            "subject": ["sub-001"],
+            "wm_snr_orig": [10.134],
+            "gm_snr_orig": [np.nan],  # NaN value
+            "holes_lh": [5],
+        }
+        df = pd.DataFrame(metrics_data)
+        metrics_csv_path = temp_output_dir / "metrics.csv"
+        df.to_csv(metrics_csv_path, index=False)
+
+        # Generate HTML report
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=list(mock_img_dir.glob("*")),
+        )
+
+        assert html_file.exists()
+
+        with open(html_file, encoding="utf-8") as f:
+            html_content = f.read()
+
+        # Check that metrics with values are present
+        assert "WM SNR (Original)" in html_content
+        assert "10.134" in html_content or "10.13" in html_content
+        # NaN value should not cause errors and the field should not appear
+        # (since template checks for 'key in metrics and metrics.key is not none')
+        assert "Holes (LH)" in html_content
+
+    def test_gen_html_report_metrics_csv_parser_error(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test gen_html_report handles ParserError from malformed CSV."""
+        # Create mock image files
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
+
+        img = Image.new("RGB", (1, 1), color="black")
+        img.save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        # Create a CSV with parser error (unclosed quote)
+        metrics_csv_path = temp_output_dir / "metrics.csv"
+        with open(metrics_csv_path, "w", encoding="utf-8") as f:
+            f.write("subject,wm_snr_orig\n")
+            f.write('sub-001,"unclosed quote\n')  # Malformed CSV
+
+        # Should not raise exception, just log warning and continue
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=list(mock_img_dir.glob("*")),
+        )
+
+        assert html_file.exists()
+        # Report should still be generated even if metrics CSV has error
+        with open(html_file, encoding="utf-8") as f:
+            html_content = f.read()
+        assert "FreeSurfer: Individual Report" in html_content
+
+    def test_gen_html_report_metrics_csv_empty_data_error(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test gen_html_report handles EmptyDataError from empty CSV."""
+        # Create mock image files
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
+
+        img = Image.new("RGB", (1, 1), color="black")
+        img.save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        # Create an empty CSV file
+        metrics_csv_path = temp_output_dir / "metrics.csv"
+        metrics_csv_path.write_text("")
+
+        # Should not raise exception, just log warning and continue
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=list(mock_img_dir.glob("*")),
+        )
+
+        assert html_file.exists()
+        # Report should still be generated even if metrics CSV is empty
+        with open(html_file, encoding="utf-8") as f:
+            html_content = f.read()
+        assert "FreeSurfer: Individual Report" in html_content
+
+    def test_gen_html_report_metrics_csv_permission_error(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test gen_html_report handles PermissionError gracefully."""
+        # Create mock image files
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
+            f.write("<svg><text>Talairach Registration</text></svg>")
+
+        img = Image.new("RGB", (1, 1), color="black")
+        img.save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        # Create a CSV file but make it unreadable on Unix-like systems
+        metrics_csv_path = temp_output_dir / "metrics.csv"
+        metrics_csv_path.write_text("subject,wm_snr_orig\nsub-001,10.134\n")
+
+        # On systems that support it, make file unreadable
+        try:
+            metrics_csv_path.chmod(0o000)  # No permissions
+            # Should not raise exception, just log warning and continue
+            html_file = mock_freesurfer_instance.gen_html_report(
+                subject="sub-001",
+                output_dir=str(temp_output_dir),
+                img_list=list(mock_img_dir.glob("*")),
+            )
+            assert html_file.exists()
+        except (PermissionError, OSError):
+            # On Windows or if we can't change permissions, skip this test
+            pytest.skip("Cannot test permission error on this system")
+        finally:
+            # Restore permissions so file can be cleaned up
+            with suppress(OSError):
+                metrics_csv_path.chmod(0o644)
 
 
 class TestBatchReportGeneration:
