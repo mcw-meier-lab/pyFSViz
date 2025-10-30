@@ -29,6 +29,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "fsqc>=2.1.4",
     "importlib-resources>=6.5.2",
     "matplotlib>=3.9.4",
     "nilearn>=0.12.1",

@@ -62,6 +62,7 @@ div#accordionOther {
 <div class="collapse navbar-collapse">
     <ul class="navbar-nav">
       <li class="nav-item"><a class="nav-link" href="#summary">Summary</a></li>
+      <li class="nav-item"><a class="nav-link" href="#metrics">Metrics</a></li>
       <li class="nav-item"><a class="nav-link" href="#tlrc">Talairach Registration</a></li>
       <li class="nav-item"><a class="nav-link" href="#aseg">Aparc+Aseg Parcellations</a></li>
       <li class="nav-item"><a class="nav-link" href="#surf">Surfaces</a></li>
@@ -82,6 +83,43 @@ div#accordionOther {
         </ul>
     </div>
 </div>
+
+<h2 id="metrics" class="mt-5 mb-2">Metrics</h2>
+{% if metrics %}
+<div class="card mt-2">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered table-hover">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if metrics.subject %}<tr><td><strong>Subject</strong></td><td>{{ metrics.subject }}</td></tr>{% endif %}
+                    {% if 'wm_snr_orig' in metrics and metrics.wm_snr_orig is not none %}<tr><td>WM SNR (Original)</td><td>{{ "%.3f"|format(metrics.wm_snr_orig) }}</td></tr>{% endif %}
+                    {% if 'gm_snr_orig' in metrics and metrics.gm_snr_orig is not none %}<tr><td>GM SNR (Original)</td><td>{{ "%.3f"|format(metrics.gm_snr_orig) }}</td></tr>{% endif %}
+                    {% if 'wm_snr_norm' in metrics and metrics.wm_snr_norm is not none %}<tr><td>WM SNR (Normalized)</td><td>{{ "%.3f"|format(metrics.wm_snr_norm) }}</td></tr>{% endif %}
+                    {% if 'gm_snr_norm' in metrics and metrics.gm_snr_norm is not none %}<tr><td>GM SNR (Normalized)</td><td>{{ "%.3f"|format(metrics.gm_snr_norm) }}</td></tr>{% endif %}
+                    {% if 'cc_size' in metrics and metrics.cc_size is not none %}<tr><td>CC Size</td><td>{{ "%.6f"|format(metrics.cc_size) }}</td></tr>{% endif %}
+                    {% if 'holes_lh' in metrics and metrics.holes_lh is not none %}<tr><td>Holes (LH)</td><td>{{ metrics.holes_lh }}</td></tr>{% endif %}
+                    {% if 'holes_rh' in metrics and metrics.holes_rh is not none %}<tr><td>Holes (RH)</td><td>{{ metrics.holes_rh }}</td></tr>{% endif %}
+                    {% if 'defects_lh' in metrics and metrics.defects_lh is not none %}<tr><td>Defects (LH)</td><td>{{ metrics.defects_lh }}</td></tr>{% endif %}
+                    {% if 'defects_rh' in metrics and metrics.defects_rh is not none %}<tr><td>Defects (RH)</td><td>{{ metrics.defects_rh }}</td></tr>{% endif %}
+                    {% if 'topo_lh' in metrics and metrics.topo_lh is not none %}<tr><td>Topology (LH)</td><td>{{ "%.3f"|format(metrics.topo_lh) }}</td></tr>{% endif %}
+                    {% if 'topo_rh' in metrics and metrics.topo_rh is not none %}<tr><td>Topology (RH)</td><td>{{ "%.3f"|format(metrics.topo_rh) }}</td></tr>{% endif %}
+                    {% if 'con_snr_lh' in metrics and metrics.con_snr_lh is not none %}<tr><td>Contrast SNR (LH)</td><td>{{ "%.3f"|format(metrics.con_snr_lh) }}</td></tr>{% endif %}
+                    {% if 'con_snr_rh' in metrics and metrics.con_snr_rh is not none %}<tr><td>Contrast SNR (RH)</td><td>{{ "%.3f"|format(metrics.con_snr_rh) }}</td></tr>{% endif %}
+                    {% if 'rot_tal_x' in metrics and metrics.rot_tal_x is not none %}<tr><td>Rotation Tal X</td><td>{{ "%.6f"|format(metrics.rot_tal_x) }}</td></tr>{% endif %}
+                    {% if 'rot_tal_y' in metrics and metrics.rot_tal_y is not none %}<tr><td>Rotation Tal Y</td><td>{{ "%.6f"|format(metrics.rot_tal_y) }}</td></tr>{% endif %}
+                    {% if 'rot_tal_z' in metrics and metrics.rot_tal_z is not none %}<tr><td>Rotation Tal Z</td><td>{{ "%.6f"|format(metrics.rot_tal_z) }}</td></tr>{% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <h2 id="tlrc" class="mt-5 mb-2">Talairach Registration</h2>
 {% for item in tlrc %}

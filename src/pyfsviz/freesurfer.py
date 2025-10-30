@@ -8,6 +8,7 @@ import os
 import shutil
 from pathlib import Path
 
+import fsqc
 import numpy as np
 import pandas as pd
 from importlib_resources import files
@@ -238,20 +239,20 @@ class FreeSurfer:
         result = report.run()
         return result.outputs.out_report
 
-    def gen_aparcaseg_plots(self, subject: str, output_dir: str, num_imgs: int = 10) -> list[Path]:
-        """Generate parcellation images (aparc & aseg).
+    def gen_aparcaseg_plots(self, subject: str, output_dir: str) -> Path:
+        """Generate parcellation images (aparc & aseg) and return the path to the aparcaseg.png file.
 
         Parameters
         ----------
+        subject : str
+            Subject ID.
         output_dir : str
             Path to output directory.
-        num_imgs : int
-            Number of images/slices to make.
 
         Returns
         -------
-        list
-            List of PNG image paths
+        Path:
+            Path to the aparcaseg.png file.
 
         Examples
         --------
@@ -265,42 +266,53 @@ class FreeSurfer:
         ...     "sub-001", Path("/opt/data/sub-001/mri/transforms")
         ... )
         """
-        mri_dir = f"{self.subjects_dir}/{subject}/mri"
-        cmap = self.get_colormap()
+        fsqc.run_fsqc(
+            subjects_dir=self.subjects_dir,
+            output_dir=output_dir,
+            subjects=[subject],
+            screenshots=True,
+            screenshots_overlay="aparc+aseg.mgz",
+            screenshots_views=[
+                "x=-40",
+                "x=-30",
+                "x=-20",
+                "x=-10",
+                "x=0",
+                "x=10",
+                "x=20",
+                "x=30",
+                "x=40",
+                "y=-40",
+                "y=-30",
+                "y=-20",
+                "y=-10",
+                "y=0",
+                "y=10",
+                "y=20",
+                "y=30",
+                "y=40",
+                "z=-40",
+                "z=-30",
+                "z=-20",
+                "z=-10",
+                "z=0",
+                "z=10",
+                "z=20",
+                "z=30",
+                "z=40",
+            ],
+            screenshots_layout=["3", "9"],
+            no_group=True,
+        )
 
-        # get parcellation and segmentation images
-        plotting.plot_roi(
-            f"{mri_dir}/aparc+aseg.mgz",
-            f"{mri_dir}/T1.mgz",
-            cmap=cmap,
-            display_mode="mosaic",
-            dim=-1,
-            cut_coords=num_imgs,
-            alpha=0.5,
-            output_file=f"{output_dir}/aseg.png",
-        )
-        display = plotting.plot_anat(
-            f"{mri_dir}/brainmask.mgz",
-            display_mode="mosaic",
-            cut_coords=num_imgs,
-            dim=-1,
-        )
-        display.add_contours(
-            f"{mri_dir}/lh.ribbon.mgz",
-            colors="b",
-            linewidths=0.5,
-            levels=[0.5],
-        )
-        display.add_contours(
-            f"{mri_dir}/rh.ribbon.mgz",
-            colors="r",
-            linewidths=0.5,
-            levels=[0.5],
-        )
-        display.savefig(f"{output_dir}/aparc.png")
-        display.close()
+        # Clean up/move files
+        shutil.move(f"{output_dir}/screenshots/{subject}/{subject}.png", f"{output_dir}/aparcaseg.png")
+        shutil.move(f"{output_dir}/metrics/{subject}/metrics.csv", f"{output_dir}/metrics.csv")
+        shutil.rmtree(f"{output_dir}/screenshots")
+        shutil.rmtree(f"{output_dir}/status")
+        shutil.rmtree(f"{output_dir}/metrics")
 
-        return [Path(f"{output_dir}/aseg.png"), Path(f"{output_dir}/aparc.png")]
+        return Path(f"{output_dir}/aparcaseg.png")
 
     def gen_surf_plots(self, subject: str, output_dir: str) -> list[Path]:
         """Generate pial, inflated, and sulcal images from various viewpoints.
@@ -352,6 +364,7 @@ class FreeSurfer:
                     cmap=cmap,
                     axes=axs[0, 0],
                     figure=fig,
+                    colorbar=False,
                 )
                 plotting.plot_surf_roi(
                     surf,
@@ -364,6 +377,7 @@ class FreeSurfer:
                     cmap=cmap,
                     axes=axs[0, 1],
                     figure=fig,
+                    colorbar=False,
                 )
                 plotting.plot_surf_roi(
                     surf,
@@ -376,6 +390,7 @@ class FreeSurfer:
                     cmap=cmap,
                     axes=axs[0, 2],
                     figure=fig,
+                    colorbar=False,
                 )
                 plotting.plot_surf_roi(
                     surf,
@@ -388,6 +403,7 @@ class FreeSurfer:
                     cmap=cmap,
                     axes=axs[1, 0],
                     figure=fig,
+                    colorbar=False,
                 )
                 plotting.plot_surf_roi(
                     surf,
@@ -400,6 +416,7 @@ class FreeSurfer:
                     cmap=cmap,
                     axes=axs[1, 1],
                     figure=fig,
+                    colorbar=False,
                 )
                 plotting.plot_surf_roi(
                     surf,
@@ -412,6 +429,7 @@ class FreeSurfer:
                     cmap=cmap,
                     axes=axs[1, 2],
                     figure=fig,
+                    colorbar=False,
                 )
 
                 plt.savefig(f"{output_dir}/{key}_{label}.png", dpi=300, format="png")
@@ -477,9 +495,7 @@ class FreeSurfer:
                     svg_content = f.read()
                 tlrc.append(svg_content)
             # Images are already in the subject directory, just reference by filename
-            elif "tlrc" in img.name:
-                tlrc.append(img.name)
-            elif "aseg" in img.name or "aparc" in img.name:
+            elif "aparcaseg" in img.name:
                 aseg.append(img.name)
             else:
                 labels = {
@@ -494,12 +510,33 @@ class FreeSurfer:
                 surf_tuple = (labels.get(surface_type, surface_type), img.name)
                 surf.append(surf_tuple)
 
+        # Read metrics.csv if it exists
+        metrics = None
+        metrics_csv_path = output_path / "metrics.csv"
+        if metrics_csv_path.exists():
+            try:
+                df = pd.read_csv(metrics_csv_path)
+                # Filter for current subject if subject column exists
+                if "subject" in df.columns:
+                    subject_data = df[df["subject"] == subject]
+                    if not subject_data.empty:
+                        metrics = subject_data.iloc[0].to_dict()
+                # If no subject column, assume single row
+                elif len(df) > 0:
+                    metrics = df.iloc[0].to_dict()
+                # Replace NaN values with None for proper Jinja2 handling
+                if metrics:
+                    metrics = {k: (None if pd.isna(v) else v) for k, v in metrics.items()}
+            except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, PermissionError, OSError) as e:
+                self.logger.warning(f"Could not read metrics.csv: {e}")
+
         _config = {
             "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d, %H:%M"),
             "subject": subject,
             "tlrc": tlrc,
             "aseg": aseg,
             "surf": surf,
+            "metrics": metrics,
         }
 
         # Save HTML file in subject directory
@@ -604,7 +641,7 @@ class FreeSurfer:
 
                     # Generate aparc+aseg plots - save directly to subject directory
                     aparcaseg = self.gen_aparcaseg_plots(subject, str(subject_output_dir))
-                    img_list.extend(aparcaseg)
+                    img_list.append(aparcaseg)
 
                     # Generate surface plots - save directly to subject directory
                     surf = self.gen_surf_plots(subject, str(subject_output_dir))
