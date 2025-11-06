@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.2.0](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.2.0) - 2025-11-06
+
+<small>[Compare with 0.1.6](https://github.com/mcw-meier-lab/pyFSViz/compare/0.1.6...0.2.0)</small>
+
+### Features
+
+- add group reporting from FreeSurfer stats ([2f23349](https://github.com/mcw-meier-lab/pyFSViz/commit/2f23349d5b96f177d8e5c90526425a1361a03a1e) by Lezlie Espana).
+
 ## [0.1.6](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.1.6) - 2025-10-30
 
 <small>[Compare with 0.1.5](https://github.com/mcw-meier-lab/pyFSViz/compare/0.1.5...0.1.6)</small>
