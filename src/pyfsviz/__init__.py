@@ -5,7 +5,7 @@ Python tools for FreeSurfer visualization and QA
 
 from __future__ import annotations
 
-from pyfsviz import freesurfer, reports
+from pyfsviz import freesurfer, reports, stats
 from pyfsviz._internal.cli import get_parser, main
 from pyfsviz.freesurfer import (
     FreeSurfer,
@@ -23,4 +23,5 @@ __all__: list[str] = [
     "get_parser",
     "main",
     "reports",
+    "stats",
 ]

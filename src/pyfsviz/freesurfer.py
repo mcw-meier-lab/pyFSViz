@@ -20,6 +20,7 @@ from nipype.interfaces.fsl import FLIRT
 from nireports.interfaces.reporting.base import SimpleBeforeAfterRPT
 
 from pyfsviz.reports import Template
+from pyfsviz.stats import check_metrics, gen_metric_plots, get_stats
 
 
 def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColormap:
@@ -677,3 +678,84 @@ class FreeSurfer:
         self.logger.info(f"  Failed: {failed}")
 
         return results
+
+    def gen_group_report(
+        self,
+        output_dir: str | Path,
+        subjects: list[str] | None = None,
+        template: str | None = None,
+        sd_threshold: float = 3.0,
+    ) -> Path:
+        """Generate a group report with outlier information for multiple subjects.
+
+        Parameters
+        ----------
+        output_dir : str or Path
+            Directory where HTML report will be saved.
+        subjects : list[str] | None
+            List of subject IDs to process. If None, processes all subjects
+            in the subjects directory.
+        template : str | None
+            HTML template to use. Default is local group.html.
+        sd_threshold : float
+            Standard deviation threshold for outlier detection. Default is 3.0.
+
+        Returns
+        -------
+        Path:
+            Path to html file.
+        """
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if subjects is None:
+            subjects = self.get_subjects()
+
+        self.logger.info(f"Generating group report for {len(subjects)} subjects...")
+        self.logger.info(f"Output directory: {output_dir}")
+
+        # Get stats files
+        stats = get_stats(subjects, str(output_dir))
+
+        # Collect all stats files (aparc might be a list)
+        stats_files: list[Path] = []
+        aseg_value = stats.get("aseg")
+        if isinstance(aseg_value, Path):
+            stats_files.append(aseg_value)
+        aparc_value = stats.get("aparc")
+        if isinstance(aparc_value, list):
+            stats_files.extend(aparc_value)
+        elif isinstance(aparc_value, Path):
+            stats_files.append(aparc_value)
+
+        # Generate plots
+        plots = gen_metric_plots(stats_files)
+
+        # Convert Plotly figures to HTML strings
+        plot_htmls = []
+        for fig in plots:
+            plot_htmls.append(fig.to_html(full_html=False, include_plotlyjs=True))
+
+        # Check for outliers
+        quality_summary = check_metrics(stats_files, sd_threshold=sd_threshold)
+
+        # Prepare template config
+        if template is None:
+            template = files("pyfsviz._internal.html") / "group.html"
+
+        _config = {
+            "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d, %H:%M"),
+            "subjects": subjects,
+            "num_subjects": len(subjects),
+            "quality_summary": quality_summary,
+            "plots": plot_htmls,
+            "sd_threshold": sd_threshold,
+        }
+
+        # Generate HTML file
+        html_file = output_dir / "group_report.html"
+        tpl = Template(str(template))
+        tpl.generate_conf(_config, str(html_file))
+
+        self.logger.info(f"✓ Generated group report: {html_file}")
+        return html_file
