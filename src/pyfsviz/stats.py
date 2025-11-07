@@ -192,7 +192,7 @@ def _get_aparc_stats(
     measures: list[str] | None = None,
     hemis: list[str] | None = None,
     delim: str = "comma",
-    parc: str = "aparc.a2009s",
+    parc: str = "aparc",
     output_dir: str = ".",
     *,
     skip: bool = True,
@@ -212,7 +212,7 @@ def _get_aparc_stats(
     delim : str, optional
         String delimiter, by default "comma"
     parc : str, optional
-        Parcellation to use, by default "aparc.a2009s"
+        Parcellation to use, by default "aparc"
     skip : bool, optional
         Skip rather than crash if missing data, by default True
     output_dir : str, optional
@@ -258,7 +258,7 @@ def _get_aparc_stats(
                 df.rename(columns={c: col_name}, inplace=True)
             combined_df = pd.concat([combined_df, df])
 
-        subjects = df["subject_id"]
+        subjects = combined_df["subject_id"]
         new_subjects = []
         for subj in subjects:
             if "/" in subj:

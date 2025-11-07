@@ -268,7 +268,7 @@ class FreeSurfer:
         ... )
         """
         fsqc.run_fsqc(
-            subjects_dir=self.subjects_dir,
+            subjects_dir=str(self.subjects_dir),
             output_dir=output_dir,
             subjects=[subject],
             screenshots=True,
