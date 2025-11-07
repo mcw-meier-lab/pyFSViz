@@ -140,7 +140,7 @@ class AparcStats(FSCommand):
 
 
 def _get_aseg_stats(
-    subjects: list[str],
+    subjects: list[str] | pd.Series,
     tablefile: str,
     meas: str = "volume",
     delim: str = "comma",
@@ -153,8 +153,9 @@ def _get_aseg_stats(
 
     Parameters
     ----------
-    subjects : list
-        List of subject IDs to use
+    subjects : list or pandas.Series
+        List of subject IDs to use. If a pandas Series is provided, it will be
+        converted to a list of strings.
     tablefile : str
         Name of output file
     meas : str, optional
@@ -173,6 +174,12 @@ def _get_aseg_stats(
     Path
         Path to output tablefile.
     """
+    # Convert pandas Series to list if needed
+    if isinstance(subjects, pd.Series):
+        subjects = subjects.tolist()
+    # Ensure all elements are strings
+    subjects = [str(s) for s in subjects]
+
     aseg_cmd = AsegStats(
         subjects=subjects,
         meas=meas,
@@ -187,7 +194,7 @@ def _get_aseg_stats(
 
 
 def _get_aparc_stats(
-    subjects: list[str],
+    subjects: list[str] | pd.Series,
     tablefile: str,
     measures: list[str] | None = None,
     hemis: list[str] | None = None,
@@ -201,8 +208,9 @@ def _get_aparc_stats(
 
     Parameters
     ----------
-    subjects : list
-        List of subject IDs
+    subjects : list or pandas.Series
+        List of subject IDs. If a pandas Series is provided, it will be
+        converted to a list of strings.
     tablefile : str
         Name of output file
     measures : str, optional
@@ -223,6 +231,12 @@ def _get_aparc_stats(
     list
         List of paths to output files
     """
+    # Convert pandas Series to list if needed
+    if isinstance(subjects, pd.Series):
+        subjects = subjects.tolist()
+    # Ensure all elements are strings
+    subjects = [str(s) for s in subjects]
+
     if measures is None:
         measures = ["area", "volume", "thickness"]
     if hemis is None:
@@ -273,7 +287,7 @@ def _get_aparc_stats(
 
 
 def get_stats(
-    subjects: list[str],
+    subjects: list[str] | pd.Series,
     output_dir: str,
     measures: list[str] | None = None,
     hemis: list[str] | None = None,
@@ -282,14 +296,21 @@ def get_stats(
 
     Parameters
     ----------
-    subjects : list
-        List of subject IDs
+    subjects : list or pandas.Series
+        List of subject IDs. If a pandas Series is provided, it will be
+        converted to a list of strings.
     output_dir : str
     measures : list, optional
         List of measures to get, by default None
     hemis : list, optional
         List of hemispheres to get, by default None
     """
+    # Convert pandas Series to list if needed
+    if isinstance(subjects, pd.Series):
+        subjects = subjects.tolist()
+    # Ensure all elements are strings
+    subjects = [str(s) for s in subjects]
+
     stats: dict[str, Path | list[Path]] = {}
     stats["aseg"] = _get_aseg_stats(subjects, "aseg.csv", output_dir=output_dir)
     stats["aparc"] = _get_aparc_stats(subjects, "aparc.csv", output_dir=output_dir, measures=measures, hemis=hemis)
