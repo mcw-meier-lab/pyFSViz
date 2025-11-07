@@ -140,7 +140,7 @@ class AparcStats(FSCommand):
 
 
 def _get_aseg_stats(
-    subjects: list[str] | pd.Series,
+    subjects: list[str],
     tablefile: str,
     meas: str = "volume",
     delim: str = "comma",
@@ -153,9 +153,8 @@ def _get_aseg_stats(
 
     Parameters
     ----------
-    subjects : list or pandas.Series
-        List of subject IDs to use. If a pandas Series is provided, it will be
-        converted to a list of strings.
+    subjects : list
+        List of subject IDs to use
     tablefile : str
         Name of output file
     meas : str, optional
@@ -174,12 +173,6 @@ def _get_aseg_stats(
     Path
         Path to output tablefile.
     """
-    # Convert pandas Series to list if needed
-    if isinstance(subjects, pd.Series):
-        subjects = subjects.tolist()
-    # Ensure all elements are strings
-    subjects = [str(s) for s in subjects]
-
     aseg_cmd = AsegStats(
         subjects=subjects,
         meas=meas,
@@ -194,7 +187,7 @@ def _get_aseg_stats(
 
 
 def _get_aparc_stats(
-    subjects: list[str] | pd.Series,
+    subjects: list[str],
     tablefile: str,
     measures: list[str] | None = None,
     hemis: list[str] | None = None,
@@ -208,9 +201,8 @@ def _get_aparc_stats(
 
     Parameters
     ----------
-    subjects : list or pandas.Series
-        List of subject IDs. If a pandas Series is provided, it will be
-        converted to a list of strings.
+    subjects : list
+        List of subject IDs
     tablefile : str
         Name of output file
     measures : str, optional
@@ -231,12 +223,6 @@ def _get_aparc_stats(
     list
         List of paths to output files
     """
-    # Convert pandas Series to list if needed
-    if isinstance(subjects, pd.Series):
-        subjects = subjects.tolist()
-    # Ensure all elements are strings
-    subjects = [str(s) for s in subjects]
-
     if measures is None:
         measures = ["area", "volume", "thickness"]
     if hemis is None:
@@ -259,35 +245,35 @@ def _get_aparc_stats(
             res = aparc_cmd._list_outputs()
             results.append(Path(output_dir, res["out_table"]))
 
-        combined_df = pd.DataFrame()
-        for file in results:
-            df = pd.read_csv(str(file))
-            label = df.columns[0]
-            df.rename(columns={label: "subject_id"}, inplace=True)
+    combined_df = pd.DataFrame()
+    for file in results:
+        df = pd.read_csv(str(file))
+        label = df.columns[0]
+        df.rename(columns={label: "subject_id"}, inplace=True)
 
-            df["hemi"] = file.stem.split("_")[0]
-            cols = df.columns.tolist()[1:-3]
-            for c in cols:
-                col_name = c.split("_")[1]
-                df.rename(columns={c: col_name}, inplace=True)
-            combined_df = pd.concat([combined_df, df])
+        df["hemi"] = file.stem.split("_")[0]
+        cols = df.columns.tolist()[1:-3]
+        for c in cols:
+            col_name = c.split("_")[1]
+            df.rename(columns={c: col_name}, inplace=True)
+        combined_df = pd.concat([combined_df, df])
 
-        subjects = combined_df["subject_id"]
-        new_subjects = []
-        for subj in subjects:
-            if "/" in subj:
-                new_subjects.append(subj.split("/")[-1])
-            else:
-                new_subjects.append(subj)
-        combined_df["subject_id"] = new_subjects
-        combined_df.to_csv(Path(output_dir, f"combined_{tablefile}"), index=False)
-        results.append(Path(output_dir, f"combined_{tablefile}"))
+    subjects = combined_df["subject_id"]
+    new_subjects = []
+    for subj in subjects:
+        if "/" in subj:
+            new_subjects.append(subj.split("/")[-1])
+        else:
+            new_subjects.append(subj)
+    combined_df["subject_id"] = new_subjects
+    combined_df.to_csv(Path(output_dir, f"combined_{tablefile}"), index=False)
+    results.append(Path(output_dir, f"combined_{tablefile}"))
 
     return results
 
 
 def get_stats(
-    subjects: list[str] | pd.Series,
+    subjects: list[str],
     output_dir: str,
     measures: list[str] | None = None,
     hemis: list[str] | None = None,
@@ -296,21 +282,14 @@ def get_stats(
 
     Parameters
     ----------
-    subjects : list or pandas.Series
-        List of subject IDs. If a pandas Series is provided, it will be
-        converted to a list of strings.
+    subjects : list
+        List of subject IDs
     output_dir : str
     measures : list, optional
         List of measures to get, by default None
     hemis : list, optional
         List of hemispheres to get, by default None
     """
-    # Convert pandas Series to list if needed
-    if isinstance(subjects, pd.Series):
-        subjects = subjects.tolist()
-    # Ensure all elements are strings
-    subjects = [str(s) for s in subjects]
-
     stats: dict[str, Path | list[Path]] = {}
     stats["aseg"] = _get_aseg_stats(subjects, "aseg.csv", output_dir=output_dir)
     stats["aparc"] = _get_aparc_stats(subjects, "aparc.csv", output_dir=output_dir, measures=measures, hemis=hemis)
@@ -434,6 +413,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
         metrics[file.stem] = df
 
     for metric, data in metrics.items():
+        idx_col = data.columns[0]
         if "hemi" in data.columns:
             for c in data.columns[1:]:
                 fig = go.Figure()
@@ -496,7 +476,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                     # Multiple hemispheres found, create combined plot
                     combined_data = []
                     for hemisphere, region_col in hemispheres.items():
-                        region_data = data[["subject_id", region_col]].copy()
+                        region_data = data[[idx_col, region_col]].copy()
                         region_data = region_data.rename(columns={region_col: "value"})
                         region_data["hemisphere"] = hemisphere
                         combined_data.append(region_data)
@@ -510,7 +490,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                             go.Box(
                                 y=plot_data[plot_data["hemisphere"] == "Left"]["value"],
                                 boxpoints="suspectedoutliers",
-                                text=plot_data["subject_id"],
+                                text=plot_data[idx_col],
                                 name="left",
                                 marker={
                                     "outliercolor": "rgb(0,0,0)",
@@ -522,7 +502,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                             go.Box(
                                 y=plot_data[plot_data["hemisphere"] == "Right"]["value"],
                                 boxpoints="suspectedoutliers",
-                                text=plot_data["subject_id"],
+                                text=plot_data[idx_col],
                                 name="right",
                                 marker={
                                     "outliercolor": "rgb(0,0,0)",
@@ -542,7 +522,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                         go.Box(
                             y=data[region_col],
                             boxpoints="suspectedoutliers",
-                            text=data["subject_id"],
+                            text=data[idx_col],
                             name=base_region,
                             marker={
                                 "outliercolor": "rgb(0,0,0)",
@@ -560,7 +540,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                     go.Box(
                         y=data[region],
                         boxpoints="suspectedoutliers",
-                        text=data[data.columns[0]],  # subject_id column
+                        text=data[idx_col],  # subject_id column
                         name=region,
                         marker={
                             "outliercolor": "rgb(0,0,0)",
