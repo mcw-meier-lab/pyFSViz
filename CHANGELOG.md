@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.2.2](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.2.2) - 2025-11-07
+
+<small>[Compare with 0.2.1](https://github.com/mcw-meier-lab/pyFSViz/compare/0.2.1...0.2.2)</small>
+
+### Bug Fixes
+
+- aparcaseg plots fix; switch to aparc.stats ([1e90703](https://github.com/mcw-meier-lab/pyFSViz/commit/1e907034d75e5574cbbde55825faf3d1d2f478ed) by Lezlie Espana).
+
 ## [0.2.1](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.2.1) - 2025-11-06
 
 <small>[Compare with 0.1.6](https://github.com/mcw-meier-lab/pyFSViz/compare/0.1.6...0.2.1)</small>
