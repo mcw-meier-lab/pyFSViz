@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.2.3](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.2.3) - 2025-11-07
+
+<small>[Compare with 0.2.2](https://github.com/mcw-meier-lab/pyFSViz/compare/0.2.2...0.2.3)</small>
+
+### Bug Fixes
+
+- handle pandas Series if they occur ([a3a4455](https://github.com/mcw-meier-lab/pyFSViz/commit/a3a44555d158a30510107271492c4f6aa4236bde) by Lezlie Espana).
+
 ## [0.2.2](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.2.2) - 2025-11-07
 
 <small>[Compare with 0.2.1](https://github.com/mcw-meier-lab/pyFSViz/compare/0.2.1...0.2.2)</small>
