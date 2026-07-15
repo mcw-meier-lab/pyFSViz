@@ -83,7 +83,7 @@ maintain = [
     "build>=1.2",
     "git-changelog>=2.5",
     "twine>=5.1",
-    "yore>=0.3.3",
+    "yore>=0.4.7",
 ]
 ci = [
     "duty>=1.6",
