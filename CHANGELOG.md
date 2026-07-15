@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.2.5](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.2.5) - 2026-07-15
+
+<small>[Compare with 0.2.4](https://github.com/mcw-meier-lab/pyFSViz/compare/0.2.4...0.2.5)</small>
+
+### Bug Fixes
+
+- FS v8 added tissue class causing individual reports to fail ([cbc1519](https://github.com/mcw-meier-lab/pyFSViz/commit/cbc1519d610136012d8bee85a118d99e61badf1d) by Lezlie Espana).
+
 ## [0.2.4](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.2.4) - 2025-11-07
 
 <small>[Compare with 0.2.3](https://github.com/mcw-meier-lab/pyFSViz/compare/0.2.3...0.2.4)</small>
