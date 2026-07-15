@@ -41,16 +41,21 @@ def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColorma
 
     """
     freesurfer_home = Path(freesurfer_home) if isinstance(freesurfer_home, str) else freesurfer_home
+    # FreeSurfer 8+ appends an optional 7th column (tissue class). Allow up to
+    # 8 fields so pandas does not fail on "Expected 6 fields ..., saw 7", then
+    # keep only index, name, R, G, B, A for the colormap.
     lut = pd.read_csv(
         freesurfer_home / "FreeSurferColorLUT.txt",
         sep=r"\s+",
         comment="#",
         header=None,
+        names=range(8),
         skipinitialspace=True,
         skip_blank_lines=True,
     )
+    lut = lut.iloc[:, :6].dropna(subset=[0, 2, 3, 4, 5])
     lut = np.array(lut)
-    lut_tab = np.array(lut[:, (2, 3, 4, 5)] / 255, dtype="float32")
+    lut_tab = np.array(lut[:, (2, 3, 4, 5)].astype(float) / 255, dtype="float32")
     lut_tab[:, 3] = 1
 
     return colors.ListedColormap(lut_tab)

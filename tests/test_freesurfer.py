@@ -19,6 +19,25 @@ def test_get_colormap(mock_freesurfer_home: Path) -> None:
     assert isinstance(colormap, colors.ListedColormap)
 
 
+def test_get_colormap_freesurfer8_extra_column(tmp_path: Path) -> None:
+    """FreeSurfer 8+ LUTs include a 7th tissue-class column that must be ignored."""
+    fs_home = tmp_path / "freesurfer"
+    fs_home.mkdir()
+    lut_file = fs_home / "FreeSurferColorLUT.txt"
+    lut_file.write_text(
+        "# FreeSurfer Color Look Up Table\n"
+        "0   Unknown                         0   0   0   0\n"
+        "2   Left-Cerebral-White-Matter    245 245 245   0\n"
+        "819 Left-HypoThal-noMB              0  80   0   0 2\n"
+        "821 Left-Fornix                     0 255 255   0 3\n",
+        encoding="utf-8",
+    )
+
+    colormap = get_freesurfer_colormap(fs_home)
+    assert isinstance(colormap, colors.ListedColormap)
+    assert colormap.N == 4
+
+
 @pytest.fixture(scope="module")
 def freesurfer(mock_freesurfer_instance: FreeSurfer) -> FreeSurfer:
     return mock_freesurfer_instance
@@ -113,7 +132,7 @@ def test_gen_html_report(freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
     }
 
     for filename, content in svg_files.items():
-        with open(mock_svg_dir / filename, "w") as f:
+        with open(mock_svg_dir / filename, "w", encoding="utf-8") as f:
             f.write(content)
 
     # Generate HTML report
