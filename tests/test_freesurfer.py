@@ -1,6 +1,7 @@
 import inspect
 import logging
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -420,8 +421,10 @@ class TestGenGroupReport:
         sig = inspect.signature(freesurfer.gen_group_report)
         assert "output_dir" in sig.parameters
         assert "subjects" in sig.parameters
+        assert "groups" in sig.parameters
         assert "template" in sig.parameters
         assert "sd_threshold" in sig.parameters
+        assert "alpha" in sig.parameters
 
     def test_gen_group_report_signature(self, freesurfer: FreeSurfer) -> None:
         """Test that gen_group_report has correct signature."""
@@ -630,3 +633,105 @@ class TestGenGroupReport:
         except (FileNotFoundError, RuntimeError, OSError, ValueError, IndexError, KeyError) as e:
             # Expected if get_stats fails with empty subjects or FreeSurfer commands aren't available
             logger.debug(f"gen_group_report with empty subjects failed (expected): {e}")
+
+    def test_gen_group_report_outlier_summary(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+        """Test that outlier subjects appear in the summary section."""
+        aseg_data = {
+            "subject_id": ["sub-001", "sub-002", "sub-003", "sub-004", "sub-005", "sub-006", "sub-007"],
+            "Left-Lateral-Ventricle": [5000.0, 5010.0, 4990.0, 5005.0, 4995.0, 10000.0, 0.0],
+        }
+        aseg_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame(aseg_data).to_csv(aseg_file, index=False)
+
+        with patch("pyfsviz.freesurfer.get_stats") as mock_get_stats:
+            mock_get_stats.return_value = {"aseg": aseg_file, "aparc": []}
+
+            html_file = freesurfer.gen_group_report(
+                output_dir=temp_output_dir,
+                subjects=["sub-001", "sub-002", "sub-003", "sub-004", "sub-005", "sub-006", "sub-007"],
+                sd_threshold=1.5,
+            )
+
+            with open(html_file, encoding="utf-8") as f:
+                html_content = f.read()
+
+            assert "Suspicious / Outlier Subjects" in html_content
+            assert "sub-006" in html_content or "sub-007" in html_content
+
+    def test_gen_group_report_with_groups(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+        """Test group report with between-group comparison."""
+        aseg_data = {
+            "subject_id": ["sub-001", "sub-002", "sub-003", "sub-004"],
+            "Left-Lateral-Ventricle": [5000.0, 5100.0, 7000.0, 7100.0],
+        }
+        aseg_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame(aseg_data).to_csv(aseg_file, index=False)
+
+        groups = {
+            "control": ["sub-001", "sub-002"],
+            "patient": ["sub-003", "sub-004"],
+        }
+
+        with patch("pyfsviz.freesurfer.get_stats") as mock_get_stats:
+            mock_get_stats.return_value = {"aseg": aseg_file, "aparc": []}
+
+            html_file = freesurfer.gen_group_report(
+                output_dir=temp_output_dir,
+                groups=groups,
+            )
+
+            with open(html_file, encoding="utf-8") as f:
+                html_content = f.read()
+
+            assert "Group Comparison" in html_content
+            assert "control" in html_content
+            assert "patient" in html_content
+            assert "Group Comparison Plots" in html_content
+
+    def test_resolve_groups_from_directories(self, freesurfer: FreeSurfer) -> None:
+        """Test resolving group membership from FreeSurfer subject directories."""
+        control_dir = freesurfer.subjects_dir / "cohort_control"
+        patient_dir = freesurfer.subjects_dir / "cohort_patient"
+        for group_dir in (control_dir, patient_dir):
+            if group_dir.exists():
+                shutil.rmtree(group_dir)
+            group_dir.mkdir()
+        shutil.copytree(freesurfer.subjects_dir / "sub-001", control_dir / "sub-control-001")
+        shutil.copytree(freesurfer.subjects_dir / "sub-001", patient_dir / "sub-patient-001")
+
+        resolved = freesurfer.resolve_groups(["cohort_control", "cohort_patient"])
+
+        assert resolved["cohort_control"] == ["sub-control-001"]
+        assert resolved["cohort_patient"] == ["sub-patient-001"]
+
+    def test_gen_group_report_inferred_groups(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+        """Test group report when group subjects are inferred from directories."""
+        control_dir = freesurfer.subjects_dir / "report_control"
+        patient_dir = freesurfer.subjects_dir / "report_patient"
+        for group_dir in (control_dir, patient_dir):
+            if group_dir.exists():
+                shutil.rmtree(group_dir)
+            group_dir.mkdir()
+        shutil.copytree(freesurfer.subjects_dir / "sub-001", control_dir / "sub-control-001")
+        shutil.copytree(freesurfer.subjects_dir / "sub-001", patient_dir / "sub-patient-001")
+
+        aseg_data = {
+            "subject_id": ["sub-control-001", "sub-patient-001"],
+            "Left-Lateral-Ventricle": [5000.0, 7000.0],
+        }
+        aseg_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame(aseg_data).to_csv(aseg_file, index=False)
+
+        with patch("pyfsviz.freesurfer.get_stats") as mock_get_stats:
+            mock_get_stats.return_value = {"aseg": aseg_file, "aparc": []}
+
+            html_file = freesurfer.gen_group_report(
+                output_dir=temp_output_dir,
+                groups={"report_control": None, "report_patient": None},
+            )
+
+            with open(html_file, encoding="utf-8") as f:
+                html_content = f.read()
+
+            assert "Group Comparison" in html_content
+            mock_get_stats.assert_called()

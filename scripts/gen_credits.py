@@ -50,13 +50,22 @@ def _requirements(deps: list[str]) -> dict[str, Requirement]:
     return {_norm_name((req := Requirement(dep)).name): req for dep in deps}
 
 
+def _marker_atom_value(atom: object) -> str | None:
+    value = getattr(atom, "value", None)
+    return value if isinstance(value, str) else None
+
+
 def _extra_marker(req: Requirement) -> str | None:
     if not req.marker:
         return None
-    try:
-        return next(marker[2].value for marker in req.marker._markers if getattr(marker[0], "value", None) == "extra")
-    except StopIteration:
-        return None
+    marker_tuple_len = 3
+    for marker in req.marker._markers:
+        if not isinstance(marker, tuple) or len(marker) != marker_tuple_len:
+            continue
+        left, _, right = marker
+        if _marker_atom_value(left) == "extra":
+            return _marker_atom_value(right)
+    return None
 
 
 def _get_metadata() -> Metadata:

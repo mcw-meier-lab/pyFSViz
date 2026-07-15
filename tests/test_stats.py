@@ -6,7 +6,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import pytest
 
-from pyfsviz.stats import check_metrics, gen_metric_plots
+from pyfsviz.stats import (
+    check_metrics,
+    compare_group_metrics,
+    gen_group_comparison_plots,
+    gen_metric_plots,
+    summarize_outlier_subjects,
+)
 
 
 @pytest.fixture
@@ -271,3 +277,73 @@ class TestGenMetricPlots:
         assert isinstance(plots, list)
         # Should have plots from regular file
         assert len(plots) >= 1
+
+
+class TestSummarizeOutlierSubjects:
+    """Test summarize_outlier_subjects function."""
+
+    def test_summarize_outlier_subjects(self, mock_stats_files_with_outliers: list[Path]) -> None:
+        """Test outlier subjects are aggregated by subject ID."""
+        quality_summary = check_metrics(mock_stats_files_with_outliers, sd_threshold=1.5)
+        summary = summarize_outlier_subjects(quality_summary)
+
+        assert isinstance(summary, list)
+        assert len(summary) > 0
+        subject_ids = {item["subject_id"] for item in summary}
+        assert {"sub-006", "sub-007"} & subject_ids
+        assert summary[0]["outlier_count"] > 0
+        assert isinstance(summary[0]["findings"], list)
+
+    def test_summarize_outlier_subjects_none(self, mock_stats_files: list[Path]) -> None:
+        """Test empty summary when no outliers are present."""
+        quality_summary = check_metrics(mock_stats_files, sd_threshold=3.0)
+        summary = summarize_outlier_subjects(quality_summary)
+
+        assert summary == []
+
+
+class TestCompareGroupMetrics:
+    """Test group comparison helpers."""
+
+    @pytest.fixture
+    def group_stats_file(self, temp_output_dir: Path) -> Path:
+        """Create a mock aseg stats file with two groups of subjects."""
+        data = {
+            "subject_id": ["sub-001", "sub-002", "sub-003", "sub-004"],
+            "Left-Lateral-Ventricle": [5000.0, 5100.0, 7000.0, 7100.0],
+            "Right-Lateral-Ventricle": [4900.0, 5000.0, 6800.0, 6900.0],
+        }
+        stats_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame(data).to_csv(stats_file, index=False)
+        return stats_file
+
+    def test_compare_group_metrics(self, group_stats_file: Path) -> None:
+        """Test between-group metric comparison returns stats for each group."""
+        groups = {
+            "control": ["sub-001", "sub-002"],
+            "patient": ["sub-003", "sub-004"],
+        }
+        comparison = compare_group_metrics([group_stats_file], groups, alpha=0.05)
+
+        assert "aseg" in comparison
+        assert "Left-Lateral-Ventricle" in comparison["aseg"]
+        assert comparison["aseg"]["Left-Lateral-Ventricle"]["control"]["n"] == 2
+        assert comparison["aseg"]["Left-Lateral-Ventricle"]["patient"]["n"] == 2
+        assert "comparison" in comparison["aseg"]["Left-Lateral-Ventricle"]
+
+    def test_compare_group_metrics_requires_two_groups(self, group_stats_file: Path) -> None:
+        """Test that one group raises ValueError."""
+        with pytest.raises(ValueError, match="At least two groups"):
+            compare_group_metrics([group_stats_file], {"only": ["sub-001"]})
+
+    def test_gen_group_comparison_plots(self, group_stats_file: Path) -> None:
+        """Test group comparison plots are Plotly figures."""
+        groups = {
+            "control": ["sub-001", "sub-002"],
+            "patient": ["sub-003", "sub-004"],
+        }
+        plots = gen_group_comparison_plots([group_stats_file], groups)
+
+        assert isinstance(plots, list)
+        assert len(plots) > 0
+        assert isinstance(plots[0], go.Figure)

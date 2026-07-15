@@ -188,7 +188,14 @@ def test_inventory_matches_api(
             # These functions are re-exported/imported into freesurfer but originate from stats
             if not is_public and item.name.startswith("pyfsviz.freesurfer."):
                 # Check if this is a function imported from stats module
-                stats_functions = {"check_metrics", "gen_metric_plots", "get_stats"}
+                stats_functions = {
+                    "check_metrics",
+                    "compare_group_metrics",
+                    "gen_group_comparison_plots",
+                    "gen_metric_plots",
+                    "get_stats",
+                    "summarize_outlier_subjects",
+                }
                 function_name = item.name.split(".")[-1]
                 if function_name in stats_functions and "stats" in public_api_names:
                     is_public = True

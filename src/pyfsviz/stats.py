@@ -1,8 +1,12 @@
 """Custom nipype interfaces for FreeSurfer stats commands."""
 
+from __future__ import annotations
+
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from nipype.interfaces.base import (
@@ -13,6 +17,13 @@ from nipype.interfaces.base import (
 )
 from nipype.interfaces.freesurfer.base import FSCommand, FSTraitedSpec
 
+try:
+    from scipy import stats as scipy_stats
+except ImportError:  # pragma: no cover
+    scipy_stats = None
+
+_MIN_GROUP_SAMPLES = 2
+_MIN_GROUPS = 2
 
 class AsegStatsInputSpec(FSTraitedSpec):
     """Input specification for asegstats2table command."""
@@ -294,6 +305,279 @@ def get_stats(
     stats["aseg"] = _get_aseg_stats(subjects, "aseg.csv", output_dir=output_dir)
     stats["aparc"] = _get_aparc_stats(subjects, "aparc.csv", output_dir=output_dir, measures=measures, hemis=hemis)
     return stats
+
+
+def _normalize_subject_id(subject_id: str) -> str:
+    if "/" in subject_id:
+        return subject_id.split("/")[-1]
+    return str(subject_id)
+
+
+def _subject_group_map(groups: dict[str, list[str]]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for group_name, group_subjects in groups.items():
+        for subject in group_subjects:
+            mapping[_normalize_subject_id(subject)] = group_name
+    return mapping
+
+
+def _load_metrics(stats_files: list[Path]) -> dict[str, pd.DataFrame]:
+    metrics: dict[str, pd.DataFrame] = {}
+    for file in stats_files:
+        if "combined" in file.stem:
+            continue
+        metrics[file.stem] = pd.read_csv(file)
+    return metrics
+
+
+def _region_columns(data: pd.DataFrame) -> list[str]:
+    return [
+        col
+        for col in data.columns[1:]
+        if col not in ["Measure:volume", "lh.aparc.a2009s_thickness", "rh.aparc.a2009s_thickness", "hemi"]
+    ]
+
+
+def _group_values(
+    data: pd.DataFrame,
+    region: str,
+    groups: dict[str, list[str]],
+) -> dict[str, np.ndarray]:
+    id_col = data.columns[0]
+    subject_groups = _subject_group_map(groups)
+    grouped: dict[str, list[float]] = {group_name: [] for group_name in groups}
+
+    for _, row in data.iterrows():
+        subject_id = _normalize_subject_id(str(row[id_col]))
+        group_name = subject_groups.get(subject_id)
+        if group_name is None:
+            continue
+        value = row[region]
+        if pd.notna(value):
+            grouped[group_name].append(float(value))
+
+    return {group_name: np.array(values, dtype=float) for group_name, values in grouped.items()}
+
+
+def _compare_two_groups(values_a: np.ndarray, values_b: np.ndarray, alpha: float) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "n_a": len(values_a),
+        "n_b": len(values_b),
+        "mean_a": float(values_a.mean()) if len(values_a) else None,
+        "mean_b": float(values_b.mean()) if len(values_b) else None,
+        "std_a": float(values_a.std(ddof=1)) if len(values_a) > 1 else None,
+        "std_b": float(values_b.std(ddof=1)) if len(values_b) > 1 else None,
+        "p_value": None,
+        "significant": False,
+        "test": None,
+    }
+    if len(values_a) < _MIN_GROUP_SAMPLES or len(values_b) < _MIN_GROUP_SAMPLES:
+        summary["message"] = "Insufficient data for statistical comparison"
+        return summary
+
+    if scipy_stats is None:
+        summary["message"] = "Install scipy for p-values between groups"
+        return summary
+
+    result = scipy_stats.ttest_ind(values_a, values_b, equal_var=False)
+    summary["p_value"] = float(result.pvalue)
+    summary["test"] = "welch_ttest"
+    summary["significant"] = result.pvalue < alpha
+    summary["message"] = f"p={result.pvalue:.4f} ({'significant' if result.pvalue < alpha else 'not significant'})"
+    return summary
+
+
+def summarize_outlier_subjects(quality_summary: dict[str, dict[str, dict[str, Any]]]) -> list[dict[str, Any]]:
+    """Aggregate outlier findings by subject for quick reference.
+
+    Parameters
+    ----------
+    quality_summary
+        Output from :func:`check_metrics`.
+
+    Returns
+    -------
+    list[dict]
+        Sorted list of subjects with outlier counts and findings.
+    """
+    subject_findings: dict[str, list[str]] = defaultdict(list)
+
+    for metric_name, metric_data in quality_summary.items():
+        for region, result in metric_data.items():
+            if result.get("status") != "outliers_detected":
+                continue
+            for outlier in result.get("outlier_subjects", []):
+                subject_id = _normalize_subject_id(str(outlier["subject_id"]))
+                finding = f"{metric_name}/{region}: {float(outlier['value']):.2f}"
+                if finding not in subject_findings[subject_id]:
+                    subject_findings[subject_id].append(finding)
+
+    return sorted(
+        [
+            {
+                "subject_id": subject_id,
+                "outlier_count": len(findings),
+                "findings": findings,
+            }
+            for subject_id, findings in subject_findings.items()
+        ],
+        key=lambda item: (-item["outlier_count"], item["subject_id"]),
+    )
+
+
+def compare_group_metrics(
+    stats_files: list[Path],
+    groups: dict[str, list[str]],
+    *,
+    alpha: float = 0.05,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    """Compare FreeSurfer metrics between named subject groups.
+
+    Parameters
+    ----------
+    stats_files
+        Paths to stats CSV files from :func:`get_stats`.
+    groups
+        Mapping of group name to subject IDs, e.g. ``{"control": [...], "patient": [...]}``.
+    alpha
+        Significance threshold for two-group comparisons.
+
+    Returns
+    -------
+    dict
+        Nested comparison results keyed by metric file and brain region.
+    """
+    if len(groups) < _MIN_GROUPS:
+        msg = "At least two groups are required for comparison"
+        raise ValueError(msg)
+
+    comparison: dict[str, dict[str, dict[str, Any]]] = {}
+    metrics = _load_metrics(stats_files)
+    group_names = list(groups)
+
+    for metric_name, data in metrics.items():
+        comparison[metric_name] = {}
+        for region in _region_columns(data):
+            grouped_values = _group_values(data, region, groups)
+            region_summary: dict[str, Any] = {
+                group_name: {
+                    "n": len(grouped_values[group_name]),
+                    "mean": float(grouped_values[group_name].mean()) if len(grouped_values[group_name]) else None,
+                    "std": float(grouped_values[group_name].std(ddof=1))
+                    if len(grouped_values[group_name]) > 1
+                    else None,
+                }
+                for group_name in group_names
+            }
+
+            if len(group_names) == _MIN_GROUPS:
+                region_summary["comparison"] = _compare_two_groups(
+                    grouped_values[group_names[0]],
+                    grouped_values[group_names[1]],
+                    alpha,
+                )
+            elif scipy_stats is None:
+                region_summary["comparison"] = {
+                    "message": "Install scipy for multi-group ANOVA",
+                    "test": None,
+                    "p_value": None,
+                    "significant": False,
+                }
+            else:
+                samples = [
+                    grouped_values[name]
+                    for name in group_names
+                    if len(grouped_values[name]) >= _MIN_GROUP_SAMPLES
+                ]
+                if len(samples) >= _MIN_GROUPS:
+                    result = scipy_stats.f_oneway(*samples)
+                    region_summary["comparison"] = {
+                        "test": "one_way_anova",
+                        "p_value": float(result.pvalue),
+                        "significant": result.pvalue < alpha,
+                        "message": (
+                            f"p={result.pvalue:.4f} ({'significant' if result.pvalue < alpha else 'not significant'})"
+                        ),
+                    }
+                else:
+                    region_summary["comparison"] = {
+                        "message": "Insufficient data for multi-group comparison",
+                        "test": None,
+                        "p_value": None,
+                        "significant": False,
+                    }
+
+            comparison[metric_name][region] = region_summary
+
+    return comparison
+
+
+def gen_group_comparison_plots(stats_files: list[Path], groups: dict[str, list[str]]) -> list[go.Figure]:
+    """Generate Plotly box plots comparing metrics across groups.
+
+    Parameters
+    ----------
+    stats_files
+        Paths to stats CSV files from :func:`get_stats`.
+    groups
+        Mapping of group name to subject IDs.
+
+    Returns
+    -------
+    list[go.Figure]
+        Plotly figures with one plot per metric region.
+    """
+    plots: list[go.Figure] = []
+    metrics = _load_metrics(stats_files)
+    group_names = list(groups)
+
+    for metric_name, data in metrics.items():
+        id_col = data.columns[0]
+        subject_groups = _subject_group_map(groups)
+
+        for region in _region_columns(data):
+            plot_rows = []
+            for _, row in data.iterrows():
+                subject_id = _normalize_subject_id(str(row[id_col]))
+                group_name = subject_groups.get(subject_id)
+                value = row[region]
+                if group_name is None or pd.isna(value):
+                    continue
+                plot_rows.append(
+                    {
+                        "group": group_name,
+                        "value": float(value),
+                        "subject_id": subject_id,
+                    },
+                )
+
+            if not plot_rows:
+                continue
+
+            plot_data = pd.DataFrame(plot_rows)
+            fig = go.Figure()
+            for group_name in group_names:
+                group_data = plot_data[plot_data["group"] == group_name]
+                if group_data.empty:
+                    continue
+                fig.add_trace(
+                    go.Box(
+                        y=group_data["value"],
+                        name=group_name,
+                        text=group_data["subject_id"],
+                        boxpoints="all",
+                    ),
+                )
+
+            fig.update_layout(
+                boxmode="group",
+                title={"text": f"{metric_name}: {region}"},
+                yaxis={"title": {"text": region}},
+                xaxis={"title": {"text": "Group"}},
+            )
+            plots.append(fig)
+
+    return plots
 
 
 def check_metrics(stats_files: list[Path], sd_threshold: float = 3.0) -> dict:

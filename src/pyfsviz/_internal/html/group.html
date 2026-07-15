@@ -74,6 +74,9 @@ div#accordionOther {
     <ul class="navbar-nav">
       <li class="nav-item"><a class="nav-link" href="#summary">Summary</a></li>
       <li class="nav-item"><a class="nav-link" href="#quality">Quality Summary</a></li>
+      {% if groups %}
+      <li class="nav-item"><a class="nav-link" href="#comparison">Group Comparison</a></li>
+      {% endif %}
       <li class="nav-item"><a class="nav-link" href="#plots">Outlier Plots</a></li>
     </ul>
 </div>
@@ -91,7 +94,35 @@ div#accordionOther {
         <li>Date and time: {{ timestamp }}.</li>
         <li>Number of subjects: {{ num_subjects }}.</li>
         <li>Outlier detection threshold: {{ sd_threshold }} standard deviations.</li>
+        {% if groups %}
+        <li>Groups compared:
+            {% for group_name, group_subjects in groups.items() %}
+            <strong>{{ group_name }}</strong> ({{ group_subjects|length }}){% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </li>
+        <li>Comparison significance threshold: p &lt; {{ alpha }}.</li>
+        {% endif %}
         </ul>
+
+        <h3 class="mt-4">Suspicious / Outlier Subjects</h3>
+        {% if outlier_subjects %}
+        <p class="stats-info">{{ outlier_subjects|length }} subject(s) flagged as outliers within the cohort.</p>
+        <ul>
+            {% for subject in outlier_subjects %}
+            <li>
+                <strong>{{ subject.subject_id }}</strong>
+                ({{ subject.outlier_count }} finding{{ "s" if subject.outlier_count != 1 else "" }})
+                <ul class="stats-info">
+                    {% for finding in subject.findings %}
+                    <li>{{ finding }}</li>
+                    {% endfor %}
+                </ul>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="passed">No outlier subjects detected.</p>
+        {% endif %}
     </div>
 </div>
 
@@ -131,6 +162,49 @@ div#accordionOther {
         </div>
     </div>
 </div>
+
+{% if groups and group_comparison %}
+<div class="card mt-3">
+    <h2 id="comparison" class="card-header">Group Comparison</h2>
+    <div class="card-body">
+        {% for metric_name, metric_data in group_comparison.items() %}
+        <div class="metric-group">
+            <h3>{{ metric_name.replace('_', ' ').title() }}</h3>
+            {% for region, result in metric_data.items() %}
+            <div class="mb-3">
+                <p><strong>{{ region }}</strong></p>
+                <ul class="stats-info">
+                    {% for group_name, group_stats in result.items() %}
+                    {% if group_name != "comparison" %}
+                    <li>{{ group_name }}: n={{ group_stats.n }}{% if group_stats.mean is not none %}, mean={{ "%.2f"|format(group_stats.mean) }}{% endif %}{% if group_stats.std is not none %}, std={{ "%.2f"|format(group_stats.std) }}{% endif %}</li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+                {% if result.comparison and result.comparison.message %}
+                <p class="{% if result.comparison.significant %}outliers_detected{% else %}passed{% endif %}">
+                    {{ result.comparison.message }}
+                </p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if groups and comparison_plots %}
+<h2 id="comparison-plots" class="mt-5 mb-2">Group Comparison Plots</h2>
+<div class="section">
+    {% for plot_html in comparison_plots %}
+    <div class="card mt-2">
+        <div class="card-body">
+            {{ plot_html|safe }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 
 <h2 id="plots" class="mt-5 mb-2">Outlier Plots</h2>
 {% if plots %}

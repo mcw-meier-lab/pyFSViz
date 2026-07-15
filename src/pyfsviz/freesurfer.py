@@ -6,7 +6,10 @@ import datetime
 import logging
 import os
 import shutil
+from collections.abc import Mapping
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import fsqc
 import numpy as np
@@ -20,7 +23,33 @@ from nipype.interfaces.fsl import FLIRT
 from nireports.interfaces.reporting.base import SimpleBeforeAfterRPT
 
 from pyfsviz.reports import Template
-from pyfsviz.stats import check_metrics, gen_metric_plots, get_stats
+from pyfsviz.stats import (
+    check_metrics,
+    compare_group_metrics,
+    gen_group_comparison_plots,
+    gen_metric_plots,
+    get_stats,
+    summarize_outlier_subjects,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+_GroupSpec = list[str] | str | Path | None
+_GroupDefinition = Mapping[str, _GroupSpec] | list[str]
+
+
+@contextmanager
+def _subjects_dir_env(subjects_dir: Path) -> Iterator[None]:
+    original = os.environ.get("SUBJECTS_DIR")
+    os.environ["SUBJECTS_DIR"] = str(subjects_dir)
+    try:
+        yield
+    finally:
+        if original is None:
+            os.environ.pop("SUBJECTS_DIR", None)
+        else:
+            os.environ["SUBJECTS_DIR"] = original
 
 
 def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColormap:
@@ -121,13 +150,146 @@ class FreeSurfer:
         """Return the colormap for the FreeSurfer data."""
         return get_freesurfer_colormap(self.freesurfer_home)
 
-    def get_subjects(self) -> list[str]:
-        """Return the subjects in the subjects directory."""
-        return [
+    def get_subjects(self, search_dir: str | Path | None = None) -> list[str]:
+        """Return FreeSurfer subjects found in a directory.
+
+        Parameters
+        ----------
+        search_dir
+            Directory to scan for subject folders. Defaults to ``self.subjects_dir``.
+
+        Returns
+        -------
+        list[str]
+            Subject IDs with a completed talairach transform.
+        """
+        base = self.subjects_dir if search_dir is None else Path(search_dir)
+        if not base.exists():
+            msg = f"Subject search directory not found: {base}"
+            raise FileNotFoundError(msg)
+
+        return sorted(
             subject.name
-            for subject in self.subjects_dir.iterdir()
+            for subject in base.iterdir()
             if subject.is_dir() and (subject / "mri" / "transforms" / "talairach.lta").exists()
-        ]
+        )
+
+    def resolve_groups(self, groups: _GroupDefinition) -> dict[str, list[str]]:
+        """Resolve group definitions to subject ID lists from FreeSurfer directories.
+
+        Each group can be defined as:
+
+        - A list of subject IDs (explicit membership)
+        - ``None`` or omitted value: scan ``subjects_dir / group_name``
+        - A path string or ``Path``: scan that directory for subject folders
+
+        Parameters
+        ----------
+        groups
+            Group names mapped to subject lists or directories, or a list of
+            subdirectory names under ``subjects_dir``.
+
+        Returns
+        -------
+        dict[str, list[str]]
+            Mapping of group names to discovered subject IDs.
+        """
+        resolved: dict[str, list[str]] = {}
+        group_items: list[tuple[str, _GroupSpec]] = (
+            [(name, None) for name in groups] if isinstance(groups, list) else list(groups.items())
+        )
+
+        for group_name, group_spec in group_items:
+            if isinstance(group_spec, list):
+                resolved[group_name] = group_spec
+                continue
+
+            if group_spec is None or group_spec == "":
+                search_dir = self.subjects_dir / group_name
+            else:
+                search_path = Path(group_spec)
+                search_dir = search_path if search_path.is_absolute() else self.subjects_dir / search_path
+
+            subjects = self.get_subjects(search_dir)
+            if not subjects:
+                self.logger.warning(f"No FreeSurfer subjects found for group '{group_name}' in {search_dir}")
+            resolved[group_name] = subjects
+
+        return resolved
+
+    def _group_search_dirs(self, groups: _GroupDefinition) -> dict[str, Path]:
+        """Return the FreeSurfer SUBJECTS_DIR to use for each group."""
+        search_dirs: dict[str, Path] = {}
+        group_items: list[tuple[str, _GroupSpec]] = (
+            [(name, None) for name in groups] if isinstance(groups, list) else list(groups.items())
+        )
+
+        for group_name, group_spec in group_items:
+            if isinstance(group_spec, list):
+                search_dirs[group_name] = self.subjects_dir
+            elif group_spec is None or group_spec == "":
+                search_dirs[group_name] = self.subjects_dir / group_name
+            else:
+                search_path = Path(group_spec)
+                search_dirs[group_name] = search_path if search_path.is_absolute() else self.subjects_dir / search_path
+
+        return search_dirs
+
+    def _stats_output_files(self, stats: dict[str, Path | list[Path]], *, prefix: str = "") -> list[Path]:
+        stats_files: list[Path] = []
+        name_suffix = f"_{prefix}" if prefix else ""
+
+        aseg_value = stats.get("aseg")
+        if isinstance(aseg_value, Path):
+            if name_suffix:
+                dest = aseg_value.with_name(f"{aseg_value.stem}{name_suffix}{aseg_value.suffix}")
+                shutil.copy2(aseg_value, dest)
+                stats_files.append(dest)
+            else:
+                stats_files.append(aseg_value)
+
+        aparc_value = stats.get("aparc")
+        if isinstance(aparc_value, list):
+            for aparc_file in aparc_value:
+                if name_suffix and "combined" not in aparc_file.stem:
+                    dest = aparc_file.with_name(f"{aparc_file.stem}{name_suffix}{aparc_file.suffix}")
+                    shutil.copy2(aparc_file, dest)
+                    stats_files.append(dest)
+                elif "combined" not in aparc_file.stem:
+                    stats_files.append(aparc_file)
+        elif isinstance(aparc_value, Path):
+            stats_files.append(aparc_value)
+
+        return stats_files
+
+    def _collect_group_stats_files(
+        self,
+        output_dir: Path,
+        subjects: list[str],
+        groups: dict[str, list[str]] | None,
+        group_search_dirs: dict[str, Path] | None,
+    ) -> list[Path]:
+        if groups is None or group_search_dirs is None:
+            stats = get_stats(subjects, str(output_dir))
+            return self._stats_output_files(stats)
+
+        unique_dirs = {search_dir.resolve() for search_dir in group_search_dirs.values()}
+        if len(unique_dirs) == 1 and next(iter(unique_dirs)) == self.subjects_dir.resolve():
+            stats = get_stats(subjects, str(output_dir))
+            return self._stats_output_files(stats)
+
+        stats_files: list[Path] = []
+        for group_name, group_subjects in groups.items():
+            if not group_subjects:
+                continue
+            group_dir = group_search_dirs[group_name]
+            group_out = output_dir / f"group_{group_name}"
+            group_out.mkdir(parents=True, exist_ok=True)
+            with _subjects_dir_env(group_dir):
+                stats = get_stats(group_subjects, str(group_out))
+            stats_files.extend(self._stats_output_files(stats, prefix=group_name))
+
+        return stats_files
 
     def check_recon_all(self, subject: str) -> bool:
         """Verify that the subject's FreeSurfer recon finished successfully."""
@@ -479,7 +641,7 @@ class FreeSurfer:
         >>> report = fs_dir.gen_html_report(out_name="sub-001.html", output_dir=".")
         """
         if template is None:
-            template = files("pyfsviz._internal.html") / "individual.html"
+            template = str(files("pyfsviz._internal.html") / "individual.html")
         if img_list is None:
             img_list = list((self.subjects_dir / subject).glob("**/*.{png,svg}"))
 
@@ -688,8 +850,10 @@ class FreeSurfer:
         self,
         output_dir: str | Path,
         subjects: list[str] | None = None,
+        groups: _GroupDefinition | None = None,
         template: str | None = None,
         sd_threshold: float = 3.0,
+        alpha: float = 0.05,
     ) -> Path:
         """Generate a group report with outlier information for multiple subjects.
 
@@ -700,10 +864,21 @@ class FreeSurfer:
         subjects : list[str] | None
             List of subject IDs to process. If None, processes all subjects
             in the subjects directory.
+        groups : _GroupDefinition | None
+            Optional group definitions for between-group comparisons. Each group
+            can be a list of subject IDs or a FreeSurfer directory to scan:
+
+            - ``["control", "patient"]`` scans ``subjects_dir/control`` and
+              ``subjects_dir/patient``
+            - ``{"control": None, "patient": None}`` same as above
+            - ``{"control": "/path/to/control_cohort"}`` scans an explicit path
+            - ``{"control": ["sub-001"]}`` uses explicit subject IDs
         template : str | None
             HTML template to use. Default is local group.html.
         sd_threshold : float
             Standard deviation threshold for outlier detection. Default is 3.0.
+        alpha : float
+            Significance threshold for group comparisons. Default is 0.05.
 
         Returns
         -------
@@ -713,25 +888,24 @@ class FreeSurfer:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        if subjects is None:
+        group_search_dirs: dict[str, Path] | None = None
+        resolved_groups: dict[str, list[str]] | None = None
+        if groups is not None:
+            if subjects is not None:
+                self.logger.warning("Both subjects and groups were provided; using subjects from groups")
+            group_search_dirs = self._group_search_dirs(groups)
+            resolved_groups = self.resolve_groups(groups)
+            subjects = [subject for group_subjects in resolved_groups.values() for subject in group_subjects]
+        elif subjects is None:
             subjects = self.get_subjects()
 
         self.logger.info(f"Generating group report for {len(subjects)} subjects...")
+        if resolved_groups:
+            for group_name, group_subjects in resolved_groups.items():
+                self.logger.info(f"  Group {group_name}: {len(group_subjects)} subject(s)")
         self.logger.info(f"Output directory: {output_dir}")
 
-        # Get stats files
-        stats = get_stats(subjects, str(output_dir))
-
-        # Collect all stats files (aparc might be a list)
-        stats_files: list[Path] = []
-        aseg_value = stats.get("aseg")
-        if isinstance(aseg_value, Path):
-            stats_files.append(aseg_value)
-        aparc_value = stats.get("aparc")
-        if isinstance(aparc_value, list):
-            stats_files.extend(aparc_value)
-        elif isinstance(aparc_value, Path):
-            stats_files.append(aparc_value)
+        stats_files = self._collect_group_stats_files(output_dir, subjects, resolved_groups, group_search_dirs)
 
         # Generate plots
         plots = gen_metric_plots(stats_files)
@@ -743,18 +917,33 @@ class FreeSurfer:
 
         # Check for outliers
         quality_summary = check_metrics(stats_files, sd_threshold=sd_threshold)
+        outlier_subjects = summarize_outlier_subjects(quality_summary)
+
+        group_comparison = None
+        comparison_plots: list[str] = []
+        if resolved_groups:
+            group_comparison = compare_group_metrics(stats_files, resolved_groups, alpha=alpha)
+            comparison_plots = [
+                fig.to_html(full_html=False, include_plotlyjs=False)
+                for fig in gen_group_comparison_plots(stats_files, resolved_groups)
+            ]
 
         # Prepare template config
         if template is None:
-            template = files("pyfsviz._internal.html") / "group.html"
+            template = str(files("pyfsviz._internal.html") / "group.html")
 
         _config = {
             "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d, %H:%M"),
             "subjects": subjects,
             "num_subjects": len(subjects),
+            "groups": resolved_groups,
             "quality_summary": quality_summary,
+            "outlier_subjects": outlier_subjects,
+            "group_comparison": group_comparison,
             "plots": plot_htmls,
+            "comparison_plots": comparison_plots,
             "sd_threshold": sd_threshold,
+            "alpha": alpha,
         }
 
         # Generate HTML file
