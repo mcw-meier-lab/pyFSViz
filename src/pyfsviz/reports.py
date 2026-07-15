@@ -21,6 +21,8 @@ Along with other report-related functions.
 
 """
 
+from pathlib import Path
+
 import jinja2
 
 
@@ -28,9 +30,12 @@ class Template:
     """Simplified jinja2 template class from oesteban."""
 
     def __init__(self, template_str: str) -> None:
-        self._template_str = template_str
+        # Load relative to the template's parent directory so absolute paths work
+        # on Windows (FileSystemLoader("/") only works on Unix).
+        template_path = Path(template_str).resolve()
+        self._template_name = template_path.name
         self._env = jinja2.Environment(
-            loader=jinja2.FileSystemLoader(searchpath="/"),
+            loader=jinja2.FileSystemLoader(searchpath=str(template_path.parent)),
             trim_blocks=True,
             lstrip_blocks=True,
             autoescape=True,
@@ -38,7 +43,7 @@ class Template:
 
     def compile(self, configs: dict) -> str:
         """Generate a string with the replacements."""
-        template = self._env.get_template(self._template_str)
+        template = self._env.get_template(self._template_name)
         return template.render(configs)
 
     def generate_conf(self, configs: dict, path: str) -> None:
