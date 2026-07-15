@@ -309,7 +309,7 @@ def get_stats(
 
 def _normalize_subject_id(subject_id: str) -> str:
     if "/" in subject_id:
-        return subject_id.split("/")[-1]
+        return subject_id.rsplit("/", maxsplit=1)[-1]
     return str(subject_id)
 
 
