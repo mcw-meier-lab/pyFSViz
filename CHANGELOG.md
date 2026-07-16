@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.4.0](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.4.0) - 2026-07-16
+
+<small>[Compare with 0.3.3](https://github.com/mcw-meier-lab/pyFSViz/compare/0.3.3...0.4.0)</small>
+
+### Features
+
+- better group summary structure ([3c5cf9f](https://github.com/mcw-meier-lab/pyFSViz/commit/3c5cf9f66e4e8322e56c2b818308054bf008216a) by Lezlie Espana).
+
+### Bug Fixes
+
+- single aparc+aseg image ([f96efd0](https://github.com/mcw-meier-lab/pyFSViz/commit/f96efd02b3aba92face4b7b299af0173afe57ddd) by Lezlie Espana).
+
 ## [0.3.3](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.3.3) - 2026-07-16
 
 <small>[Compare with 0.3.2](https://github.com/mcw-meier-lab/pyFSViz/compare/0.3.2...0.3.3)</small>
