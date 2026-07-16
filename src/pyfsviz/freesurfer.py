@@ -508,6 +508,7 @@ class FreeSurfer:
         surf_dir = f"{self.subjects_dir}/{subject}/surf"
         label_dir = f"{self.subjects_dir}/{subject}/label"
         cmap = self.get_colormap()
+        generated: list[Path] = []
 
         hemis = {"lh": "left", "rh": "right"}
         for key, val in hemis.items():
@@ -600,10 +601,12 @@ class FreeSurfer:
                     colorbar=False,
                 )
 
-                plt.savefig(f"{output_dir}/{key}_{label}.png", dpi=300, format="png")
+                out_file = Path(output_dir) / f"{key}_{label}.png"
+                plt.savefig(out_file, dpi=300, format="png")
                 plt.close()
+                generated.append(out_file)
 
-        return sorted(Path(output_dir).glob("*.png"))
+        return sorted(generated)
 
     def gen_html_report(
         self,
