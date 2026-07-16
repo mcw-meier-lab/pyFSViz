@@ -26,6 +26,31 @@ body {
 .outliers_detected { color: #ff6600; font-weight: bold; }
 .no_data { color: #666666; font-style: italic; }
 .stats-info { font-size: 0.9em; color: #666; margin-left: 20px; }
+.badge-status {
+  display: inline-block;
+  min-width: 5.5rem;
+  padding: 0.25em 0.55em;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+.badge-outliers { background: #ffe8d6; color: #b34700; }
+.badge-passed { background: #e6f4ea; color: #137333; }
+.badge-nodata { background: #eee; color: #666; }
+.quality-counts { margin-bottom: 1rem; }
+.quality-counts .badge-status { margin-right: 0.4rem; }
+.quality-table td, .quality-table th { vertical-align: top; }
+.outlier-list { margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.9em; color: #555; }
+.card-header .btn-link {
+  color: #212529;
+  text-decoration: none;
+  font-weight: 600;
+}
+.card-header .btn-link:hover, .card-header .btn-link:focus {
+  color: #0056b3;
+  text-decoration: none;
+}
 
 div.warning p.admonition-title, .code .error {
   color: red ;
@@ -129,37 +154,113 @@ div#accordionOther {
 <div class="card mt-3">
     <h2 id="quality" class="card-header">Quality Summary</h2>
     <div class="card-body">
-        <div class="quality-summary">
         {% if quality_summary %}
+        {% set ns = namespace(outliers=0, passed=0, no_data=0, regions=0) %}
+        {% for metric_name, metric_data in quality_summary.items() %}
+            {% for region, result in metric_data.items() %}
+                {% set ns.regions = ns.regions + 1 %}
+                {% if result.status == "outliers_detected" %}
+                    {% set ns.outliers = ns.outliers + 1 %}
+                {% elif result.status == "passed" %}
+                    {% set ns.passed = ns.passed + 1 %}
+                {% else %}
+                    {% set ns.no_data = ns.no_data + 1 %}
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+
+        <div class="quality-counts">
+            <span class="badge-status badge-outliers">{{ ns.outliers }} outlier{{ "s" if ns.outliers != 1 else "" }}</span>
+            <span class="badge-status badge-passed">{{ ns.passed }} passed</span>
+            {% if ns.no_data %}
+            <span class="badge-status badge-nodata">{{ ns.no_data }} no data</span>
+            {% endif %}
+            <span class="stats-info ml-2">{{ ns.regions }} regions across {{ quality_summary|length }} metric file{{ "s" if quality_summary|length != 1 else "" }}</span>
+        </div>
+
+        <div class="accordion" id="qualityAccordion">
             {% for metric_name, metric_data in quality_summary.items() %}
-            <div class="metric-group">
-                <h3>{{ metric_name.replace('_', ' ').title() }}</h3>
-                
-                {% for region, result in metric_data.items() %}
-                    {% if result.status == "no_data" %}
-                        <p class="no_data">{{ region }}: {{ result.message }}</p>
-                    {% elif result.status == "outliers_detected" %}
-                        <p class="outliers_detected">{{ region }}: {{ result.message }}</p>
-                        <p class="stats-info">Mean: {{ "%.2f"|format(result.mean) }}, Std: {{ "%.2f"|format(result.std) }}, Range: {{ "%.2f"|format(result.lower_bound) }} to {{ "%.2f"|format(result.upper_bound) }}</p>
-                        {% if result.outlier_subjects %}
-                        <p class="stats-info"><strong>Outlier Subjects:</strong></p>
-                        <ul class="stats-info">
-                            {% for outlier in result.outlier_subjects %}
-                            <li>{{ outlier.subject_id }}: {{ "%.2f"|format(outlier.value) }}</li>
-                            {% endfor %}
-                        </ul>
-                        {% endif %}
-                    {% elif result.status == "passed" %}
-                        <p class="passed">{{ region }}: {{ result.message }}</p>
-                        <p class="stats-info">Mean: {{ "%.2f"|format(result.mean) }}, Std: {{ "%.2f"|format(result.std) }}, Range: {{ "%.2f"|format(result.lower_bound) }} to {{ "%.2f"|format(result.upper_bound) }}</p>
-                    {% endif %}
-                {% endfor %}
+            {% set metric_id = "metric-" ~ loop.index %}
+            {% set metric_outliers = [] %}
+            {% for region, result in metric_data.items() if result.status == "outliers_detected" %}
+                {% if metric_outliers.append(1) %}{% endif %}
+            {% endfor %}
+            <div class="card">
+                <div class="card-header" id="heading-{{ metric_id }}">
+                    <h3 class="mb-0">
+                        <button class="btn btn-link btn-block text-left{% if metric_outliers|length == 0 %} collapsed{% endif %}" type="button" data-toggle="collapse" data-target="#collapse-{{ metric_id }}" aria-expanded="{{ 'true' if metric_outliers|length > 0 else 'false' }}" aria-controls="collapse-{{ metric_id }}">
+                            {{ metric_name.replace('_', ' ').title() }}
+                            {% if metric_outliers|length > 0 %}
+                            <span class="badge-status badge-outliers float-right">{{ metric_outliers|length }} outlier{{ "s" if metric_outliers|length != 1 else "" }}</span>
+                            {% else %}
+                            <span class="badge-status badge-passed float-right">all clear</span>
+                            {% endif %}
+                        </button>
+                    </h3>
+                </div>
+                <div id="collapse-{{ metric_id }}" class="collapse{% if metric_outliers|length > 0 %} show{% endif %}" aria-labelledby="heading-{{ metric_id }}" data-parent="#qualityAccordion">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover quality-table mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 28%;">Region</th>
+                                        <th style="width: 12%;">Status</th>
+                                        <th style="width: 12%;">Mean</th>
+                                        <th style="width: 12%;">Std</th>
+                                        <th style="width: 18%;">±{{ sd_threshold }} SD range</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for region, result in metric_data.items() %}
+                                    <tr class="{% if result.status == 'outliers_detected' %}table-warning{% elif result.status == 'no_data' %}table-secondary{% endif %}">
+                                        <td><strong>{{ region }}</strong></td>
+                                        <td>
+                                            {% if result.status == "outliers_detected" %}
+                                            <span class="badge-status badge-outliers">outlier</span>
+                                            {% elif result.status == "passed" %}
+                                            <span class="badge-status badge-passed">passed</span>
+                                            {% else %}
+                                            <span class="badge-status badge-nodata">no data</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{% if result.mean is defined and result.mean is not none %}{{ "%.2f"|format(result.mean) }}{% else %}—{% endif %}</td>
+                                        <td>{% if result.std is defined and result.std is not none %}{{ "%.2f"|format(result.std) }}{% else %}—{% endif %}</td>
+                                        <td>
+                                            {% if result.lower_bound is defined and result.upper_bound is defined and result.lower_bound is not none and result.upper_bound is not none %}
+                                            {{ "%.2f"|format(result.lower_bound) }} – {{ "%.2f"|format(result.upper_bound) }}
+                                            {% else %}—{% endif %}
+                                        </td>
+                                        <td>
+                                            {% if result.status == "outliers_detected" %}
+                                            {{ result.message }}
+                                            {% if result.outlier_subjects %}
+                                            <ul class="outlier-list">
+                                                {% for outlier in result.outlier_subjects %}
+                                                <li><code>{{ outlier.subject_id }}</code>: {{ "%.2f"|format(outlier.value) }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                            {% endif %}
+                                            {% elif result.status == "no_data" %}
+                                            {{ result.message }}
+                                            {% else %}
+                                            —
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
             {% endfor %}
+        </div>
         {% else %}
             <p class="no_data">No quality metrics available.</p>
         {% endif %}
-        </div>
     </div>
 </div>
 
