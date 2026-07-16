@@ -25,6 +25,7 @@ except ImportError:  # pragma: no cover
 _MIN_GROUP_SAMPLES = 2
 _MIN_GROUPS = 2
 
+
 class AsegStatsInputSpec(FSTraitedSpec):
     """Input specification for asegstats2table command."""
 
@@ -485,9 +486,7 @@ def compare_group_metrics(
                 }
             else:
                 samples = [
-                    grouped_values[name]
-                    for name in group_names
-                    if len(grouped_values[name]) >= _MIN_GROUP_SAMPLES
+                    grouped_values[name] for name in group_names if len(grouped_values[name]) >= _MIN_GROUP_SAMPLES
                 ]
                 if len(samples) >= _MIN_GROUPS:
                     result = scipy_stats.f_oneway(*samples)
