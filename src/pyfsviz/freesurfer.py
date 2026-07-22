@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import datetime
+import inspect
 import logging
 import os
 import shutil
+import textwrap
 from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import fsqc
+import fsqc.createScreenshots
 import numpy as np
 import pandas as pd
+from fsqc import fsqcMain
 from importlib_resources import files
 from matplotlib import colors
 from matplotlib import pyplot as plt
@@ -38,6 +42,44 @@ if TYPE_CHECKING:
 _GroupSpec = list[str] | str | Path | None
 _GroupDefinition = Mapping[str, _GroupSpec] | list[str]
 
+# Upstream fsqc warns on ambiguous surface contour segments but does not advance
+# sortIdx, which hangs createScreenshots. Resolve by taking the first match.
+_FSQC_SURFACE_HANG = """\
+                    elif findIdx.shape[0] > 1:
+                        warnings.warn(
+                            "WARNING: a problem occurred with the surface overlays",
+                            stacklevel = 2
+                        )"""
+_FSQC_SURFACE_HANG_FIX = """\
+                    elif findIdx.shape[0] > 1:
+                        warnings.warn(
+                            "WARNING: a problem occurred with the surface overlays",
+                            stacklevel = 2
+                        )
+                        if findIdx[0, 1] == 0:
+                            tmpxSort = np.append(
+                                tmpxSort,
+                                np.array(tmpx[sortIdx[findIdx[0, 0]], ::1], ndmin=2),
+                                axis=0,
+                            )
+                            tmpySort = np.append(
+                                tmpySort,
+                                np.array(tmpy[sortIdx[findIdx[0, 0]], ::1], ndmin=2),
+                                axis=0,
+                            )
+                        elif findIdx[0, 1] == 1:
+                            tmpxSort = np.append(
+                                tmpxSort,
+                                np.array(tmpx[sortIdx[findIdx[0, 0]], ::-1], ndmin=2),
+                                axis=0,
+                            )
+                            tmpySort = np.append(
+                                tmpySort,
+                                np.array(tmpy[sortIdx[findIdx[0, 0]], ::-1], ndmin=2),
+                                axis=0,
+                            )
+                        sortIdx = np.delete(sortIdx, findIdx[0, 0])"""
+
 
 @contextmanager
 def _subjects_dir_env(subjects_dir: Path) -> Iterator[None]:
@@ -50,6 +92,35 @@ def _subjects_dir_env(subjects_dir: Path) -> Iterator[None]:
             os.environ.pop("SUBJECTS_DIR", None)
         else:
             os.environ["SUBJECTS_DIR"] = original
+
+
+@contextmanager
+def _fsqc_screenshots_no_hang() -> Iterator[None]:
+    """Patch fsqc screenshot contour sorting so ambiguous segments cannot hang."""
+    original = fsqc.createScreenshots.createScreenshots
+    source = textwrap.dedent(inspect.getsource(original))
+    if _FSQC_SURFACE_HANG not in source:
+        logging.getLogger(__name__).warning(
+            "Could not patch fsqc surface-overlay hang; screenshots may stall "
+            "if contour sorting hits an ambiguous segment",
+        )
+        yield
+        return
+
+    namespace: dict[str, object] = {}
+    exec(  # noqa: S102
+        source.replace(_FSQC_SURFACE_HANG, _FSQC_SURFACE_HANG_FIX),
+        fsqc.createScreenshots.__dict__,
+        namespace,
+    )
+    patched = namespace["createScreenshots"]
+    fsqc.createScreenshots.createScreenshots = patched
+    fsqcMain.createScreenshots = patched
+    try:
+        yield
+    finally:
+        fsqc.createScreenshots.createScreenshots = original
+        fsqcMain.createScreenshots = original
 
 
 def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColormap:
@@ -434,44 +505,45 @@ class FreeSurfer:
         ...     "sub-001", Path("/opt/data/sub-001/mri/transforms")
         ... )
         """
-        fsqc.run_fsqc(
-            subjects_dir=str(self.subjects_dir),
-            output_dir=output_dir,
-            subjects=[subject],
-            screenshots=True,
-            screenshots_overlay="aparc+aseg.mgz",
-            screenshots_views=[
-                "x=-40",
-                "x=-30",
-                "x=-20",
-                "x=-10",
-                "x=0",
-                "x=10",
-                "x=20",
-                "x=30",
-                "x=40",
-                "y=-40",
-                "y=-30",
-                "y=-20",
-                "y=-10",
-                "y=0",
-                "y=10",
-                "y=20",
-                "y=30",
-                "y=40",
-                "z=-40",
-                "z=-30",
-                "z=-20",
-                "z=-10",
-                "z=0",
-                "z=10",
-                "z=20",
-                "z=30",
-                "z=40",
-            ],
-            screenshots_layout=["3", "9"],
-            no_group=True,
-        )
+        with _fsqc_screenshots_no_hang():
+            fsqc.run_fsqc(
+                subjects_dir=str(self.subjects_dir),
+                output_dir=output_dir,
+                subjects=[subject],
+                screenshots=True,
+                screenshots_overlay="aparc+aseg.mgz",
+                screenshots_views=[
+                    "x=-40",
+                    "x=-30",
+                    "x=-20",
+                    "x=-10",
+                    "x=0",
+                    "x=10",
+                    "x=20",
+                    "x=30",
+                    "x=40",
+                    "y=-40",
+                    "y=-30",
+                    "y=-20",
+                    "y=-10",
+                    "y=0",
+                    "y=10",
+                    "y=20",
+                    "y=30",
+                    "y=40",
+                    "z=-40",
+                    "z=-30",
+                    "z=-20",
+                    "z=-10",
+                    "z=0",
+                    "z=10",
+                    "z=20",
+                    "z=30",
+                    "z=40",
+                ],
+                screenshots_layout=["3", "9"],
+                no_group=True,
+            )
 
         # Clean up/move files
         shutil.move(f"{output_dir}/screenshots/{subject}/{subject}.png", f"{output_dir}/aparcaseg.png")
