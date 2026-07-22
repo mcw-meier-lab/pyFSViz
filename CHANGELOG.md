@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.4.1](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.4.1) - 2026-07-22
+
+<small>[Compare with 0.4.0](https://github.com/mcw-meier-lab/pyFSViz/compare/0.4.0...0.4.1)</small>
+
+### Bug Fixes
+
+- surface overlay infinite loop bug ([4189396](https://github.com/mcw-meier-lab/pyFSViz/commit/41893967fef526cd81c881345fb4503eb49a8b22) by Lezlie Espana).
+
 ## [0.4.0](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.4.0) - 2026-07-16
 
 <small>[Compare with 0.3.3](https://github.com/mcw-meier-lab/pyFSViz/compare/0.3.3...0.4.0)</small>
