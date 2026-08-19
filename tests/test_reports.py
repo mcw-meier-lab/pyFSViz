@@ -1033,3 +1033,78 @@ class TestBatchReportGeneration:
         assert "gen_images" in sig1.parameters
         assert "template" in sig1.parameters
         assert "skip_failed" in sig1.parameters
+        assert "skip_existing" in sig1.parameters
+
+    def test_gen_batch_reports_skip_existing(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test that skip_existing leaves completed subjects unchanged."""
+        reports_dir = temp_output_dir / "reports"
+        existing_subject = "sub-001"
+        existing_html = reports_dir / existing_subject / f"{existing_subject}.html"
+        existing_html.parent.mkdir(parents=True, exist_ok=True)
+        existing_html.write_text("already generated", encoding="utf-8")
+        original_mtime = existing_html.stat().st_mtime_ns
+
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=reports_dir,
+            subjects=[existing_subject],
+            gen_images=False,
+            skip_existing=True,
+        )
+
+        assert results[existing_subject] == existing_html
+        assert existing_html.read_text(encoding="utf-8") == "already generated"
+        assert existing_html.stat().st_mtime_ns == original_mtime
+
+    def test_gen_batch_reports_skip_existing_processes_new_subjects(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test that skip_existing still generates reports for new subjects."""
+        reports_dir = temp_output_dir / "reports"
+        existing_subject = "already-done"
+        existing_html = reports_dir / existing_subject / f"{existing_subject}.html"
+        existing_html.parent.mkdir(parents=True, exist_ok=True)
+        existing_html.write_text("already generated", encoding="utf-8")
+
+        new_subject = "sub-001"
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=reports_dir,
+            subjects=[existing_subject, new_subject],
+            gen_images=False,
+            skip_existing=True,
+        )
+
+        assert results[existing_subject] == existing_html
+        assert existing_html.read_text(encoding="utf-8") == "already generated"
+        new_html = results[new_subject]
+        assert isinstance(new_html, Path)
+        assert new_html.exists()
+        assert new_html.read_text(encoding="utf-8") != "already generated"
+
+    def test_gen_batch_reports_skip_existing_false_overwrites(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test that existing reports are overwritten when skip_existing is False."""
+        reports_dir = temp_output_dir / "reports"
+        subject = "sub-001"
+        existing_html = reports_dir / subject / f"{subject}.html"
+        existing_html.parent.mkdir(parents=True, exist_ok=True)
+        existing_html.write_text("already generated", encoding="utf-8")
+
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=reports_dir,
+            subjects=[subject],
+            gen_images=False,
+            skip_existing=False,
+        )
+
+        html_file = results[subject]
+        assert isinstance(html_file, Path)
+        assert html_file.read_text(encoding="utf-8") != "already generated"

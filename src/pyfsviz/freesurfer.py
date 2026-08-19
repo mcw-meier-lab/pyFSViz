@@ -797,6 +797,7 @@ class FreeSurfer:
         *,
         gen_images: bool = True,
         skip_failed: bool = True,
+        skip_existing: bool = False,
     ) -> dict[str, Path | Exception]:
         """Generate HTML reports with images for multiple subjects.
 
@@ -817,12 +818,16 @@ class FreeSurfer:
         skip_failed : bool
             If True, continues processing other subjects if one fails.
             If False, raises exception on first failure.
+        skip_existing : bool
+            If True, skip subjects that already have an HTML report at
+            ``{output_dir}/{subject}/{subject}.html``. Incomplete subjects
+            (images but no report) are still processed. Default is False.
 
         Returns
         -------
         dict[str, Path | Exception]
-            Dictionary mapping subject IDs to either the generated HTML file
-            path or the exception that occurred during processing.
+            Dictionary mapping subject IDs to either the generated (or existing)
+            HTML file path or the exception that occurred during processing.
 
         Examples
         --------
@@ -845,8 +850,16 @@ class FreeSurfer:
         self.logger.info(f"Output directory: {output_dir}")
 
         results: dict[str, Path | Exception] = {}
+        skipped = 0
 
         for i, subject in enumerate(subjects, 1):
+            existing_html = output_dir / subject / f"{subject}.html"
+            if skip_existing and existing_html.is_file():
+                self.logger.info(f"[{i}/{len(subjects)}] Skipping {subject}: report already exists")
+                results[subject] = existing_html
+                skipped += 1
+                continue
+
             self.logger.info(f"[{i}/{len(subjects)}] Processing subject: {subject}")
 
             try:
@@ -913,10 +926,11 @@ class FreeSurfer:
                 if not skip_failed:
                     raise e  # noqa: TRY201 # pylint: disable=try-except-raise
 
-        successful = sum(1 for result in results.values() if isinstance(result, Path))
-        failed = len(results) - successful
+        successful = sum(1 for result in results.values() if isinstance(result, Path)) - skipped
+        failed = len(results) - successful - skipped
         self.logger.info("\nBatch report generation with images completed:")
         self.logger.info(f"  Successful: {successful}")
+        self.logger.info(f"  Skipped: {skipped}")
         self.logger.info(f"  Failed: {failed}")
 
         return results
