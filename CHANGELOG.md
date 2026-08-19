@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.5.2](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.5.2) - 2026-08-19
+
+<small>[Compare with 0.5.1](https://github.com/mcw-meier-lab/pyFSViz/compare/0.5.1...0.5.2)</small>
+
+### Bug Fixes
+
+- add tiv from synthseg file to aseg.csv ([fbbbff2](https://github.com/mcw-meier-lab/pyFSViz/commit/fbbbff2ef328e06afdff1bd8f045afc77558746c) by Lezlie Espana).
+
 ## [0.5.1](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.5.1) - 2026-08-19
 
 <small>[Compare with 0.5.0](https://github.com/mcw-meier-lab/pyFSViz/compare/0.5.0...0.5.1)</small>
