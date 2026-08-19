@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,80 @@ except ImportError:  # pragma: no cover
 
 _MIN_GROUP_SAMPLES = 2
 _MIN_GROUPS = 2
+_SYNTHSEG_VOL_CSV = Path("stats") / "synthseg.vol.csv"
+_SYNTHSEG_TIV_COLUMN = "total intracranial"
+_logger = logging.getLogger(__name__)
+
+
+def _normalize_subject_id(subject_id: str) -> str:
+    if "/" in subject_id:
+        return subject_id.rsplit("/", maxsplit=1)[-1]
+    return str(subject_id)
+
+
+def _synthseg_tiv_column(columns: pd.Index) -> str | None:
+    for column in columns:
+        if str(column).strip().lower() == _SYNTHSEG_TIV_COLUMN:
+            return str(column)
+    return None
+
+
+def _read_synthseg_tiv(subject: str, subjects_dir: str | Path | None = None) -> float | None:
+    """Return SynthSeg total intracranial volume for a subject, if available."""
+    base = Path(subjects_dir) if subjects_dir is not None else Path(os.environ.get("SUBJECTS_DIR", "."))
+    csv_path = base / _normalize_subject_id(subject) / _SYNTHSEG_VOL_CSV
+    if not csv_path.is_file():
+        return None
+
+    try:
+        df = pd.read_csv(csv_path)
+    except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError) as exc:
+        _logger.warning("Could not read SynthSeg volumes for %s: %s", subject, exc)
+        return None
+
+    tiv_col = _synthseg_tiv_column(df.columns)
+    if tiv_col is None or df.empty:
+        return None
+
+    id_col = df.columns[0]
+    if str(id_col).strip().lower() != _SYNTHSEG_TIV_COLUMN:
+        subject_key = _normalize_subject_id(subject)
+        matches = df[df[id_col].map(lambda value: _normalize_subject_id(str(value)) == subject_key)]
+        row = matches.iloc[0] if not matches.empty else df.iloc[0]
+    else:
+        row = df.iloc[0]
+
+    value = row[tiv_col]
+    if pd.isna(value):
+        return None
+    return float(value)
+
+
+def _add_synthseg_tiv_to_aseg(
+    aseg_file: Path,
+    subjects: list[str],
+    subjects_dir: str | Path | None = None,
+    *,
+    column: str = _SYNTHSEG_TIV_COLUMN,
+) -> Path:
+    """Add SynthSeg total intracranial volume to an aggregated aseg table."""
+    df = pd.read_csv(aseg_file)
+    if df.empty:
+        return aseg_file
+
+    id_col = df.columns[0]
+    tiv_by_subject = {_normalize_subject_id(subject): _read_synthseg_tiv(subject, subjects_dir) for subject in subjects}
+    mapped = df[id_col].map(lambda sid: tiv_by_subject.get(_normalize_subject_id(str(sid))))
+
+    if column in df.columns:
+        df[column] = mapped
+    else:
+        df.insert(1, column, mapped)
+
+    df.to_csv(aseg_file, index=False)
+    if mapped.isna().all():
+        _logger.warning("No SynthSeg total intracranial values found for aseg table %s", aseg_file)
+    return aseg_file
 
 
 class AsegStatsInputSpec(FSTraitedSpec):
@@ -195,7 +271,8 @@ def _get_aseg_stats(
     )
     aseg_cmd.run()
     aseg_file = aseg_cmd._list_outputs()["out_table"]
-    return Path(output_dir, aseg_file)
+    aseg_path = Path(output_dir, aseg_file)
+    return _add_synthseg_tiv_to_aseg(aseg_path, subjects)
 
 
 def _get_aparc_stats(
@@ -306,12 +383,6 @@ def get_stats(
     stats["aseg"] = _get_aseg_stats(subjects, "aseg.csv", output_dir=output_dir)
     stats["aparc"] = _get_aparc_stats(subjects, "aparc.csv", output_dir=output_dir, measures=measures, hemis=hemis)
     return stats
-
-
-def _normalize_subject_id(subject_id: str) -> str:
-    if "/" in subject_id:
-        return subject_id.rsplit("/", maxsplit=1)[-1]
-    return str(subject_id)
 
 
 def _subject_group_map(groups: dict[str, list[str]]) -> dict[str, str]:

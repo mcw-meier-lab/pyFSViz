@@ -98,6 +98,7 @@ div#accordionOther {
                 </thead>
                 <tbody>
                     {% if metrics.subject %}<tr><td><strong>Subject</strong></td><td>{{ metrics.subject }}</td></tr>{% endif %}
+                    {% if 'total_intracranial' in metrics and metrics.total_intracranial is not none %}<tr><td>Total Intracranial Volume</td><td>{{ "%.2f"|format(metrics.total_intracranial) }}</td></tr>{% endif %}
                     {% if 'wm_snr_orig' in metrics and metrics.wm_snr_orig is not none %}<tr><td>WM SNR (Original)</td><td>{{ "%.3f"|format(metrics.wm_snr_orig) }}</td></tr>{% endif %}
                     {% if 'gm_snr_orig' in metrics and metrics.gm_snr_orig is not none %}<tr><td>GM SNR (Original)</td><td>{{ "%.3f"|format(metrics.gm_snr_orig) }}</td></tr>{% endif %}
                     {% if 'wm_snr_norm' in metrics and metrics.wm_snr_norm is not none %}<tr><td>WM SNR (Normalized)</td><td>{{ "%.3f"|format(metrics.wm_snr_norm) }}</td></tr>{% endif %}

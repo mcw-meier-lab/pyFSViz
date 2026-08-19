@@ -7,6 +7,8 @@ import plotly.graph_objects as go
 import pytest
 
 from pyfsviz.stats import (
+    _add_synthseg_tiv_to_aseg,
+    _read_synthseg_tiv,
     check_metrics,
     compare_group_metrics,
     gen_group_comparison_plots,
@@ -347,3 +349,76 @@ class TestCompareGroupMetrics:
         assert isinstance(plots, list)
         assert len(plots) > 0
         assert isinstance(plots[0], go.Figure)
+
+
+def _write_synthseg_csv(path: Path, *, subject: str, tiv: float, include_subject_column: bool = True) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if include_subject_column:
+        pd.DataFrame(
+            {
+                "subject": [subject],
+                "total intracranial": [tiv],
+                "left cerebral white matter": [400000.0],
+            },
+        ).to_csv(path, index=False)
+    else:
+        pd.DataFrame(
+            {
+                "total intracranial": [tiv],
+                "left cerebral white matter": [400000.0],
+            },
+        ).to_csv(path, index=False)
+
+
+class TestSynthSegTIV:
+    """Test merging SynthSeg total intracranial volume into aseg tables."""
+
+    def test_read_synthseg_tiv_with_subject_column(self, temp_output_dir: Path) -> None:
+        """Test reading TIV from a per-subject SynthSeg CSV."""
+        _write_synthseg_csv(
+            temp_output_dir / "sub-001" / "stats" / "synthseg.vol.csv",
+            subject="sub-001",
+            tiv=1500123.4,
+        )
+
+        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(1500123.4)
+
+    def test_read_synthseg_tiv_without_subject_column(self, temp_output_dir: Path) -> None:
+        """Test reading TIV when the CSV has only volume columns."""
+        _write_synthseg_csv(
+            temp_output_dir / "sub-001" / "stats" / "synthseg.vol.csv",
+            subject="sub-001",
+            tiv=1234567.0,
+            include_subject_column=False,
+        )
+
+        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(1234567.0)
+
+    def test_read_synthseg_tiv_missing_file(self, temp_output_dir: Path) -> None:
+        """Test that a missing SynthSeg CSV returns None."""
+        assert _read_synthseg_tiv("sub-001", temp_output_dir) is None
+
+    def test_add_synthseg_tiv_to_aseg(self, temp_output_dir: Path) -> None:
+        """Test that TIV is inserted into aseg.csv and aligned by subject."""
+        for subject, tiv in (("sub-001", 1500000.0), ("sub-002", 1600000.0)):
+            _write_synthseg_csv(
+                temp_output_dir / subject / "stats" / "synthseg.vol.csv",
+                subject=subject,
+                tiv=tiv,
+            )
+
+        aseg_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame(
+            {
+                "Measure:volume": ["sub-001", "sub-002", "sub-003"],
+                "Left-Lateral-Ventricle": [5000.0, 5200.0, 4800.0],
+            },
+        ).to_csv(aseg_file, index=False)
+
+        result = _add_synthseg_tiv_to_aseg(aseg_file, ["sub-001", "sub-002", "sub-003"], temp_output_dir)
+        df = pd.read_csv(result)
+
+        assert list(df.columns[:2]) == ["Measure:volume", "total intracranial"]
+        assert df.loc[df["Measure:volume"] == "sub-001", "total intracranial"].iloc[0] == pytest.approx(1500000.0)
+        assert df.loc[df["Measure:volume"] == "sub-002", "total intracranial"].iloc[0] == pytest.approx(1600000.0)
+        assert pd.isna(df.loc[df["Measure:volume"] == "sub-003", "total intracranial"].iloc[0])

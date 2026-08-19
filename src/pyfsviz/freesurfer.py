@@ -28,6 +28,7 @@ from nireports.interfaces.reporting.base import SimpleBeforeAfterRPT
 
 from pyfsviz.reports import Template
 from pyfsviz.stats import (
+    _read_synthseg_tiv,
     check_metrics,
     compare_group_metrics,
     gen_group_comparison_plots,
@@ -772,6 +773,12 @@ class FreeSurfer:
                     metrics = {k: (None if pd.isna(v) else v) for k, v in metrics.items()}
             except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, PermissionError, OSError) as e:
                 self.logger.warning(f"Could not read metrics.csv: {e}")
+
+        tiv = _read_synthseg_tiv(subject, self.subjects_dir)
+        if tiv is not None:
+            if metrics is None:
+                metrics = {}
+            metrics["total_intracranial"] = tiv
 
         _config = {
             "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d, %H:%M"),
