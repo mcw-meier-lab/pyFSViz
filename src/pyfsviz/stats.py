@@ -201,12 +201,12 @@ def _get_aseg_stats(
 def _get_aparc_stats(
     subjects: list[str],
     tablefile: str,
+    *,
     measures: list[str] | None = None,
     hemis: list[str] | None = None,
     delim: str = "comma",
     parc: str = "aparc",
     output_dir: str = ".",
-    *,
     skip: bool = True,
 ) -> list[Path]:
     """Generate parcellation stats.

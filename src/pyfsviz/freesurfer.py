@@ -941,6 +941,7 @@ class FreeSurfer:
         subjects: list[str] | None = None,
         groups: _GroupDefinition | None = None,
         template: str | None = None,
+        *,
         sd_threshold: float = 3.0,
         alpha: float = 0.05,
     ) -> Path:
