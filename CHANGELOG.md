@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.5.1](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.5.1) - 2026-08-19
+
+<small>[Compare with 0.5.0](https://github.com/mcw-meier-lab/pyFSViz/compare/0.5.0...0.5.1)</small>
+
 ## [0.5.0](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.5.0) - 2026-08-19
 
 <small>[Compare with 0.4.1](https://github.com/mcw-meier-lab/pyFSViz/compare/0.4.1...0.5.0)</small>
