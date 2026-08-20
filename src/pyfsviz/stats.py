@@ -29,6 +29,7 @@ _MIN_GROUPS = 2
 _SYNTHSEG_VOL_CSV = Path("stats") / "synthseg.vol.csv"
 _SYNTHSEG_TIV_COLUMN = "total intracranial"
 _APARC_REPEAT_COLUMNS = ("BrainSegVolNotVent", "eTIV")
+_STATS_ID_COLUMN = "ID"
 _logger = logging.getLogger(__name__)
 
 
@@ -86,6 +87,7 @@ def _add_synthseg_tiv_to_aseg(
     """Add SynthSeg total intracranial volume to an aggregated aseg table."""
     df = pd.read_csv(aseg_file)
     if df.empty:
+        _set_stats_id_column(df).to_csv(aseg_file, index=False)
         return aseg_file
 
     id_col = df.columns[0]
@@ -97,10 +99,29 @@ def _add_synthseg_tiv_to_aseg(
     else:
         df.insert(1, column, mapped)
 
+    df = _set_stats_id_column(df)
     df.to_csv(aseg_file, index=False)
     if mapped.isna().all():
         _logger.warning("No SynthSeg total intracranial values found for aseg table %s", aseg_file)
     return aseg_file
+
+
+def _set_stats_id_column(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename the first stats column to ``ID`` and normalize subject identifiers."""
+    if df.columns.empty:
+        return df
+    first = df.columns[0]
+    if first != _STATS_ID_COLUMN:
+        df = df.rename(columns={first: _STATS_ID_COLUMN})
+    df[_STATS_ID_COLUMN] = df[_STATS_ID_COLUMN].astype(str).map(_normalize_subject_id)
+    return df
+
+
+def _rewrite_stats_id_column(table_file: Path) -> Path:
+    """Rewrite a stats CSV so the first column is ``ID``."""
+    df = pd.read_csv(table_file)
+    _set_stats_id_column(df).to_csv(table_file, index=False)
+    return table_file
 
 
 class AsegStatsInputSpec(FSTraitedSpec):
@@ -286,13 +307,12 @@ def _combine_aparc_tables(table_files: list[Path]) -> pd.DataFrame:
     combined: pd.DataFrame | None = None
     for table_file in table_files:
         df = pd.read_csv(table_file)
-        df = df.rename(columns={df.columns[0]: "subject_id"})
-        df["subject_id"] = df["subject_id"].astype(str).map(_normalize_subject_id)
+        df = _set_stats_id_column(df)
         if combined is None:
             combined = df
             continue
-        overlap = [col for col in df.columns if col in combined.columns and col != "subject_id"]
-        combined = combined.merge(df.drop(columns=overlap), on="subject_id", how="outer")
+        overlap = [col for col in df.columns if col in combined.columns and col != _STATS_ID_COLUMN]
+        combined = combined.merge(df.drop(columns=overlap), on=_STATS_ID_COLUMN, how="outer")
 
     if combined is None:
         return pd.DataFrame()
@@ -359,7 +379,7 @@ def _get_aparc_stats(
             )
             aparc_cmd.run()
             res = aparc_cmd._list_outputs()
-            results.append(Path(output_dir, res["out_table"]))
+            results.append(_rewrite_stats_id_column(Path(output_dir, res["out_table"])))
 
     combined_path = Path(output_dir, f"combined_{tablefile}")
     _combine_aparc_tables(results).to_csv(combined_path, index=False)
@@ -413,7 +433,7 @@ def _region_columns(data: pd.DataFrame) -> list[str]:
     return [
         col
         for col in data.columns[1:]
-        if col not in ["Measure:volume", "lh.aparc.a2009s_thickness", "rh.aparc.a2009s_thickness", "hemi"]
+        if col not in ["ID", "Measure:volume", "lh.aparc.a2009s_thickness", "rh.aparc.a2009s_thickness", "hemi"]
     ]
 
 
@@ -683,7 +703,7 @@ def check_metrics(stats_files: list[Path], sd_threshold: float = 3.0) -> dict:
         region_cols = [
             col
             for col in data.columns[1:]
-            if col not in ["Measure:volume", "lh.aparc.a2009s_thickness", "rh.aparc.a2009s_thickness"]
+            if col not in ["ID", "Measure:volume", "lh.aparc.a2009s_thickness", "rh.aparc.a2009s_thickness"]
         ]
         id_col = data.columns[0]
 
@@ -787,7 +807,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                             "line": {"outlierwidth": 1, "outliercolor": "rgb(0,0,0)"},
                         },
                         name="lh",
-                        text=data["subject_id"],
+                        text=data[idx_col],
                     ),
                 )
                 fig.add_trace(
@@ -799,7 +819,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                             "line": {"outlierwidth": 1, "outliercolor": "rgb(0,0,0)"},
                         },
                         name="rh",
-                        text=data["subject_id"],
+                        text=data[idx_col],
                     ),
                 )
                 fig.update_layout(

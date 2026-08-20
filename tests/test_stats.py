@@ -10,6 +10,7 @@ from pyfsviz.stats import (
     _add_synthseg_tiv_to_aseg,
     _combine_aparc_tables,
     _read_synthseg_tiv,
+    _rewrite_stats_id_column,
     check_metrics,
     compare_group_metrics,
     gen_group_comparison_plots,
@@ -429,7 +430,8 @@ class TestCombineAparcTables:
 
         combined = _combine_aparc_tables([lh_area, rh_area, lh_thickness, rh_volume])
 
-        assert list(combined["subject_id"]) == ["sub-001", "sub-002"]
+        assert combined.columns[0] == "ID"
+        assert list(combined["ID"]) == ["sub-001", "sub-002"]
         assert combined.shape[0] == 2
         for column in (
             "lh_bankssts_area",
@@ -444,9 +446,9 @@ class TestCombineAparcTables:
         assert "measure" not in combined.columns
         assert list(combined.columns).count("BrainSegVolNotVent") == 1
         assert list(combined.columns).count("eTIV") == 1
-        assert combined.loc[combined["subject_id"] == "sub-001", "lh_bankssts_area"].iloc[0] == pytest.approx(245.0)
-        assert combined.loc[combined["subject_id"] == "sub-001", "lh_bankssts_thickness"].iloc[0] == pytest.approx(2.4)
-        assert combined.loc[combined["subject_id"] == "sub-002", "rh_bankssts_volume"].iloc[0] == pytest.approx(1250.0)
+        assert combined.loc[combined["ID"] == "sub-001", "lh_bankssts_area"].iloc[0] == pytest.approx(245.0)
+        assert combined.loc[combined["ID"] == "sub-001", "lh_bankssts_thickness"].iloc[0] == pytest.approx(2.4)
+        assert combined.loc[combined["ID"] == "sub-002", "rh_bankssts_volume"].iloc[0] == pytest.approx(1250.0)
 
     def test_combine_aparc_tables_empty(self) -> None:
         """No input tables yields an empty frame."""
@@ -502,7 +504,23 @@ class TestSynthSegTIV:
         result = _add_synthseg_tiv_to_aseg(aseg_file, ["sub-001", "sub-002", "sub-003"], temp_output_dir)
         df = pd.read_csv(result)
 
-        assert list(df.columns[:2]) == ["Measure:volume", "total intracranial"]
-        assert df.loc[df["Measure:volume"] == "sub-001", "total intracranial"].iloc[0] == pytest.approx(1500000.0)
-        assert df.loc[df["Measure:volume"] == "sub-002", "total intracranial"].iloc[0] == pytest.approx(1600000.0)
-        assert pd.isna(df.loc[df["Measure:volume"] == "sub-003", "total intracranial"].iloc[0])
+        assert list(df.columns[:2]) == ["ID", "total intracranial"]
+        assert df.loc[df["ID"] == "sub-001", "total intracranial"].iloc[0] == pytest.approx(1500000.0)
+        assert df.loc[df["ID"] == "sub-002", "total intracranial"].iloc[0] == pytest.approx(1600000.0)
+        assert pd.isna(df.loc[df["ID"] == "sub-003", "total intracranial"].iloc[0])
+
+    def test_rewrite_stats_id_column(self, temp_output_dir: Path) -> None:
+        """Test that Measure:volume is rewritten to ID."""
+        stats_file = temp_output_dir / "lh_area_aparc.csv"
+        pd.DataFrame(
+            {
+                "lh.aparc.area": ["/data/sub-001", "sub-002"],
+                "lh_bankssts_area": [245.0, 250.0],
+            },
+        ).to_csv(stats_file, index=False)
+
+        _rewrite_stats_id_column(stats_file)
+        df = pd.read_csv(stats_file)
+
+        assert df.columns[0] == "ID"
+        assert list(df["ID"]) == ["sub-001", "sub-002"]
