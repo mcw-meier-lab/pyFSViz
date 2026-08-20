@@ -384,9 +384,8 @@ class FreeSurfer:
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
-        ...     subject="sub-001",
         ... )
-        >>> fs_dir.gen_tlrc_data("sub-001", Path("/opt/data/sub-001/mri/transforms"))
+        >>> fs_dir.gen_tlrc_data("sub-001", "/opt/data/sub-001/mri/transforms")
         """
         # get inverse transform
         lta_file = self.subjects_dir / subject / "mri" / "transforms" / "talairach.xfm.lta"
@@ -452,10 +451,9 @@ class FreeSurfer:
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
-        ...     subject="sub-001",
         ... )
         >>> report = fs_dir.gen_tlrc_report(
-        ...     "sub-001", Path("/opt/data/sub-001/mri/transforms")
+        ...     "sub-001", "/opt/data/reports/sub-001"
         ... )
         """
         if tlrc_dir is None:
@@ -499,10 +497,9 @@ class FreeSurfer:
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
-        ...     subject="sub-001",
         ... )
         >>> images = fs_dir.gen_aparcaseg_plots(
-        ...     "sub-001", Path("/opt/data/sub-001/mri/transforms")
+        ...     "sub-001", "/opt/data/reports/sub-001"
         ... )
         """
         with _fsqc_screenshots_no_hang():
@@ -573,9 +570,8 @@ class FreeSurfer:
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
-        ...     subject="sub-001",
         ... )
-        >>> images = fs_dir.gen_surf_plots("sub-001", Path("/opt/data/sub-001/surf"))
+        >>> images = fs_dir.gen_surf_plots("sub-001", "/opt/data/reports/sub-001")
         """
         surf_dir = f"{self.subjects_dir}/{subject}/surf"
         label_dir = f"{self.subjects_dir}/{subject}/label"
@@ -711,9 +707,8 @@ class FreeSurfer:
         >>> fs_dir = FreeSurfer(
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
-        ...     subject="sub-001",
         ... )
-        >>> report = fs_dir.gen_html_report(out_name="sub-001.html", output_dir=".")
+        >>> report = fs_dir.gen_html_report("sub-001", "/opt/data/reports")
         """
         if template is None:
             template = str(files("pyfsviz._internal.html") / "individual.html")
@@ -833,7 +828,7 @@ class FreeSurfer:
         --------
         >>> from pyfsviz.freesurfer import FreeSurfer
         >>> fs = FreeSurfer()
-        >>> results = fs.gen_batch_reports("reports/", log_level="INFO")
+        >>> results = fs.gen_batch_reports("reports/")
         >>> for subject, result in results.items():
         ...     if isinstance(result, Path):
         ...         print(f"Generated report for {subject}: {result}")

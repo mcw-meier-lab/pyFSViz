@@ -28,6 +28,7 @@ _MIN_GROUP_SAMPLES = 2
 _MIN_GROUPS = 2
 _SYNTHSEG_VOL_CSV = Path("stats") / "synthseg.vol.csv"
 _SYNTHSEG_TIV_COLUMN = "total intracranial"
+_APARC_REPEAT_COLUMNS = ("BrainSegVolNotVent", "eTIV")
 _logger = logging.getLogger(__name__)
 
 
@@ -275,6 +276,32 @@ def _get_aseg_stats(
     return _add_synthseg_tiv_to_aseg(aseg_path, subjects)
 
 
+def _combine_aparc_tables(table_files: list[Path]) -> pd.DataFrame:
+    """Merge per-hemisphere, per-measure aparc tables into one wide table.
+
+    ``aparcstats2table`` column names already encode hemisphere, region, and
+    measure (for example ``lh_bankssts_area``). Metadata columns that are
+    repeated in every table are kept once.
+    """
+    combined: pd.DataFrame | None = None
+    for table_file in table_files:
+        df = pd.read_csv(table_file)
+        df = df.rename(columns={df.columns[0]: "subject_id"})
+        df["subject_id"] = df["subject_id"].astype(str).map(_normalize_subject_id)
+        if combined is None:
+            combined = df
+            continue
+        overlap = [col for col in df.columns if col in combined.columns and col != "subject_id"]
+        combined = combined.merge(df.drop(columns=overlap), on="subject_id", how="outer")
+
+    if combined is None:
+        return pd.DataFrame()
+
+    trailing = [col for col in _APARC_REPEAT_COLUMNS if col in combined.columns]
+    leading = [col for col in combined.columns if col not in trailing]
+    return combined[leading + trailing]
+
+
 def _get_aparc_stats(
     subjects: list[str],
     tablefile: str,
@@ -334,29 +361,9 @@ def _get_aparc_stats(
             res = aparc_cmd._list_outputs()
             results.append(Path(output_dir, res["out_table"]))
 
-    combined_df = pd.DataFrame()
-    for file in results:
-        df = pd.read_csv(str(file))
-        label = df.columns[0]
-        df.rename(columns={label: "subject_id"}, inplace=True)
-
-        df["hemi"] = file.stem.split("_")[0]
-        cols = df.columns.tolist()[1:-3]
-        for c in cols:
-            col_name = c.split("_")[1]
-            df.rename(columns={c: col_name}, inplace=True)
-        combined_df = pd.concat([combined_df, df])
-
-    subjects = combined_df["subject_id"]
-    new_subjects = []
-    for subj in subjects:
-        if "/" in subj:
-            new_subjects.append(subj.split("/")[-1])
-        else:
-            new_subjects.append(subj)
-    combined_df["subject_id"] = new_subjects
-    combined_df.to_csv(Path(output_dir, f"combined_{tablefile}"), index=False)
-    results.append(Path(output_dir, f"combined_{tablefile}"))
+    combined_path = Path(output_dir, f"combined_{tablefile}")
+    _combine_aparc_tables(results).to_csv(combined_path, index=False)
+    results.append(combined_path)
 
     return results
 

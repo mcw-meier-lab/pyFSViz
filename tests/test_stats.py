@@ -8,6 +8,7 @@ import pytest
 
 from pyfsviz.stats import (
     _add_synthseg_tiv_to_aseg,
+    _combine_aparc_tables,
     _read_synthseg_tiv,
     check_metrics,
     compare_group_metrics,
@@ -368,6 +369,89 @@ def _write_synthseg_csv(path: Path, *, subject: str, tiv: float, include_subject
                 "left cerebral white matter": [400000.0],
             },
         ).to_csv(path, index=False)
+
+
+def _write_aparc_table(
+    path: Path,
+    *,
+    hemi: str,
+    measure: str,
+    subjects: list[str],
+    regions: dict[str, list[float]],
+) -> None:
+    data: dict[str, list[object]] = {f"{hemi}.aparc.{measure}": subjects}
+    for region, values in regions.items():
+        data[f"{hemi}_{region}_{measure}"] = values
+    data["BrainSegVolNotVent"] = [1_100_000.0] * len(subjects)
+    data["eTIV"] = [1_500_000.0] * len(subjects)
+    pd.DataFrame(data).to_csv(path, index=False)
+
+
+class TestCombineAparcTables:
+    """Test merging aparcstats2table outputs into combined_aparc.csv."""
+
+    def test_combine_aparc_tables_keeps_hemi_region_and_measure(self, temp_output_dir: Path) -> None:
+        """Combined columns must encode hemisphere, region, and measure."""
+        subjects = ["/data/sub-001", "sub-002"]
+        lh_area = temp_output_dir / "lh_area_aparc.csv"
+        rh_area = temp_output_dir / "rh_area_aparc.csv"
+        lh_thickness = temp_output_dir / "lh_thickness_aparc.csv"
+        rh_volume = temp_output_dir / "rh_volume_aparc.csv"
+
+        _write_aparc_table(
+            lh_area,
+            hemi="lh",
+            measure="area",
+            subjects=subjects,
+            regions={"bankssts": [245.0, 250.0], "superiorfrontal": [6800.0, 6900.0]},
+        )
+        _write_aparc_table(
+            rh_area,
+            hemi="rh",
+            measure="area",
+            subjects=subjects,
+            regions={"bankssts": [240.0, 248.0], "superiorfrontal": [6700.0, 6850.0]},
+        )
+        _write_aparc_table(
+            lh_thickness,
+            hemi="lh",
+            measure="thickness",
+            subjects=subjects,
+            regions={"bankssts": [2.4, 2.5], "superiorfrontal": [2.6, 2.7]},
+        )
+        _write_aparc_table(
+            rh_volume,
+            hemi="rh",
+            measure="volume",
+            subjects=subjects,
+            regions={"bankssts": [1200.0, 1250.0], "superiorfrontal": [21000.0, 21500.0]},
+        )
+
+        combined = _combine_aparc_tables([lh_area, rh_area, lh_thickness, rh_volume])
+
+        assert list(combined["subject_id"]) == ["sub-001", "sub-002"]
+        assert combined.shape[0] == 2
+        for column in (
+            "lh_bankssts_area",
+            "rh_bankssts_area",
+            "lh_bankssts_thickness",
+            "rh_bankssts_volume",
+            "lh_superiorfrontal_area",
+            "rh_superiorfrontal_volume",
+        ):
+            assert column in combined.columns
+        assert "hemi" not in combined.columns
+        assert "measure" not in combined.columns
+        assert list(combined.columns).count("BrainSegVolNotVent") == 1
+        assert list(combined.columns).count("eTIV") == 1
+        assert combined.loc[combined["subject_id"] == "sub-001", "lh_bankssts_area"].iloc[0] == pytest.approx(245.0)
+        assert combined.loc[combined["subject_id"] == "sub-001", "lh_bankssts_thickness"].iloc[0] == pytest.approx(2.4)
+        assert combined.loc[combined["subject_id"] == "sub-002", "rh_bankssts_volume"].iloc[0] == pytest.approx(1250.0)
+
+    def test_combine_aparc_tables_empty(self) -> None:
+        """No input tables yields an empty frame."""
+        combined = _combine_aparc_tables([])
+        assert combined.empty
 
 
 class TestSynthSegTIV:
