@@ -452,9 +452,7 @@ class FreeSurfer:
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
         ... )
-        >>> report = fs_dir.gen_tlrc_report(
-        ...     "sub-001", "/opt/data/reports/sub-001"
-        ... )
+        >>> report = fs_dir.gen_tlrc_report("sub-001", "/opt/data/reports/sub-001")
         """
         if tlrc_dir is None:
             tlrc_dir = f"{self.subjects_dir}/{subject}/mri/transforms"
@@ -498,9 +496,7 @@ class FreeSurfer:
         ...     freesurfer_home="/opt/freesurfer",
         ...     subjects_dir="/opt/data",
         ... )
-        >>> images = fs_dir.gen_aparcaseg_plots(
-        ...     "sub-001", "/opt/data/reports/sub-001"
-        ... )
+        >>> images = fs_dir.gen_aparcaseg_plots("sub-001", "/opt/data/reports/sub-001")
         """
         with _fsqc_screenshots_no_hang():
             fsqc.run_fsqc(

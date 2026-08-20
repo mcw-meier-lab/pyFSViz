@@ -380,7 +380,7 @@ def _write_aparc_table(
     subjects: list[str],
     regions: dict[str, list[float]],
 ) -> None:
-    data: dict[str, list[object]] = {f"{hemi}.aparc.{measure}": subjects}
+    data: dict[str, list[str] | list[float]] = {f"{hemi}.aparc.{measure}": subjects}
     for region, values in regions.items():
         data[f"{hemi}_{region}_{measure}"] = values
     data["BrainSegVolNotVent"] = [1_100_000.0] * len(subjects)
