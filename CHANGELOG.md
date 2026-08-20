@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.5.3](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.5.3) - 2026-08-20
+
+<small>[Compare with 0.5.2](https://github.com/mcw-meier-lab/pyFSViz/compare/0.5.2...0.5.3)</small>
+
+### Bug Fixes
+
+- make first column of stats file ID for clarity ([3606562](https://github.com/mcw-meier-lab/pyFSViz/commit/36065629db388a9af9b0c9d0c989dd5799733fb9) by Lezlie Espana).
+- combined_aparc table collapsed across measures ([fd9b762](https://github.com/mcw-meier-lab/pyFSViz/commit/fd9b76271cfe1782102669e7ec67ab33a3ba380f) by Lezlie Espana).
+- remove tiv from individual report (oops) ([d7ef44b](https://github.com/mcw-meier-lab/pyFSViz/commit/d7ef44b99e481d8f399cb4029975841758197555) by Lezlie Espana).
+
 ## [0.5.2](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.5.2) - 2026-08-19
 
 <small>[Compare with 0.5.1](https://github.com/mcw-meier-lab/pyFSViz/compare/0.5.1...0.5.2)</small>
