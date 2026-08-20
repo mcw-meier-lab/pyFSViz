@@ -19,6 +19,14 @@ nav:
   - Changelog: changelog.md
   - Credits: credits.md
   - License: license.md
+- User guide:
+  - Prerequisites: user-guide/prerequisites.md
+  - Installation: user-guide/installation.md
+  - Quick start: user-guide/quickstart.md
+  - Individual reports: user-guide/individual-reports.md
+  - Group reports: user-guide/group-reports.md
+  - Stats and outliers: user-guide/stats.md
+  - Troubleshooting: user-guide/troubleshooting.md
 - Development:
   - Contributing: contributing.md
   - Code of Conduct: code_of_conduct.md
@@ -140,6 +148,13 @@ plugins:
     sections:
       Usage:
       - index.md
+      - user-guide/prerequisites.md
+      - user-guide/installation.md
+      - user-guide/quickstart.md
+      - user-guide/individual-reports.md
+      - user-guide/group-reports.md
+      - user-guide/stats.md
+      - user-guide/troubleshooting.md
 - git-revision-date-localized:
     enabled: !ENV [DEPLOY, false]
     enable_creation_date: true

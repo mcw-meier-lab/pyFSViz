@@ -1,0 +1,71 @@
+---
+title: Quick start
+---
+
+# Quick start
+
+This page assumes FreeSurfer and FSL are already installed and sourced in the
+current session. If `mri_convert` or `flirt` is missing, start with
+[Prerequisites](prerequisites.md).
+
+## Construct `FreeSurfer`
+
+With `FREESURFER_HOME` and `SUBJECTS_DIR` set:
+
+```python
+from pyfsviz import FreeSurfer
+
+fs = FreeSurfer()
+print(fs.get_subjects())
+```
+
+Or pass the paths explicitly (binaries must still be on `PATH`):
+
+```python
+fs = FreeSurfer(
+    freesurfer_home="/path/to/freesurfer",
+    subjects_dir="/path/to/your/subjects",
+)
+```
+
+`get_subjects()` returns subject IDs under `SUBJECTS_DIR` that have
+`mri/transforms/talairach.lta`. Empty list usually means the wrong subjects
+directory or incomplete reconstructions.
+
+## Individual reports
+
+Generate HTML QA reports for every discovered subject:
+
+```python
+results = fs.gen_batch_reports("reports/", skip_existing=True)
+```
+
+Each subject is written to `reports/<subject>/<subject>.html`, with adjacent
+PNG/SVG images. The return value maps subject IDs to a `Path` on success or
+an `Exception` if that subject failed.
+
+See [Individual reports](individual-reports.md) for flags and output layout.
+
+## Group report
+
+Summarize volumes and parcellation metrics across the cohort, flag outliers,
+and write `reports/group_report.html`:
+
+```python
+fs.gen_group_report("reports/")
+```
+
+To compare named groups (for example two subdirectories of `SUBJECTS_DIR`):
+
+```python
+fs.gen_group_report("reports/", groups=["control", "patient"])
+```
+
+See [Group reports](group-reports.md) for group definitions, thresholds, and
+CSV outputs.
+
+## Next
+
+- [Individual reports](individual-reports.md) — screenshots, Talairach overlays, batch flags
+- [Group reports](group-reports.md) — outliers, between-group comparisons
+- [Troubleshooting](troubleshooting.md) — missing env vars and empty subject lists
