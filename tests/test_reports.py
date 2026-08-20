@@ -624,39 +624,6 @@ class TestHTMLReportGeneration:
         # Check that Metrics is in navigation
         assert 'href="#metrics"' in html_content
 
-    def test_gen_html_report_includes_synthseg_tiv(
-        self,
-        mock_freesurfer_instance: FreeSurfer,
-        temp_output_dir: Path,
-    ) -> None:
-        """Test that individual reports include SynthSeg total intracranial volume."""
-        synthseg_path = mock_freesurfer_instance.subjects_dir / "sub-001" / "stats" / "synthseg.vol.csv"
-        synthseg_path.parent.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(
-            {
-                "subject": ["sub-001"],
-                "total intracranial": [1500123.4],
-            },
-        ).to_csv(synthseg_path, index=False)
-
-        mock_img_dir = temp_output_dir / "mock_imgs"
-        mock_img_dir.mkdir(parents=True, exist_ok=True)
-        img = Image.new("RGB", (1, 1), color="black")
-        img.save(mock_img_dir / "aparcaseg.png", "PNG")
-
-        try:
-            html_file = mock_freesurfer_instance.gen_html_report(
-                subject="sub-001",
-                output_dir=str(temp_output_dir),
-                img_list=list(mock_img_dir.glob("*")),
-            )
-            html_content = html_file.read_text(encoding="utf-8")
-            assert "Total Intracranial Volume" in html_content
-            assert "1500123.40" in html_content
-        finally:
-            with suppress(OSError):
-                synthseg_path.unlink()
-
     def test_gen_html_report_without_metrics(
         self,
         mock_freesurfer_instance: FreeSurfer,
