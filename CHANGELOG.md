@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.6.0](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.0) - 2026-08-24
+
+<small>[Compare with 0.5.3](https://github.com/mcw-meier-lab/pyFSViz/compare/0.5.3...0.6.0)</small>
+
+### Features
+
+- better group reports and comparisons ([9f59fa9](https://github.com/mcw-meier-lab/pyFSViz/commit/9f59fa959d922cf6c39c5f519b54fe4cd6baeddf) by Lezlie Espana).
+
+### Bug Fixes
+
+- initializing files and total_intracranial without synthseg available ([d1695e2](https://github.com/mcw-meier-lab/pyFSViz/commit/d1695e2466276e43d1e80b09f52ef7828eb08eb7) by Lezlie Espana).
+
 ## [0.5.3](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.5.3) - 2026-08-20
 
 <small>[Compare with 0.5.2](https://github.com/mcw-meier-lab/pyFSViz/compare/0.5.2...0.5.3)</small>
