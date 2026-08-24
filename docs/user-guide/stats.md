@@ -45,19 +45,21 @@ and region with the raw value).
 ## Group comparisons
 
 ```python
-from pyfsviz.stats import compare_group_metrics, gen_group_comparison_plots
+from pyfsviz.stats import gen_group_comparison_plots
 
 groups = {
     "control": ["sub-001", "sub-002"],
     "patient": ["sub-101", "sub-102"],
 }
-comparison = compare_group_metrics(files, groups, alpha=0.05)
 figures = gen_group_comparison_plots(files, groups)
 ```
 
-`compare_group_metrics` needs at least two groups. Two groups use Welch’s
-t-test; more than two use a one-way ANOVA. Install `scipy` if you need
-p-values; it is not installed with pyFSViz.
+These are Plotly box plots (one per metric region) with a point per subject.
+The group HTML report embeds the same figures in one tab per stats table
+(aseg, LH Area, RH Thickness, …). There are no t-tests or p-values.
+
+`compare_group_metrics` returns per-group `n`, `mean`, and `std` if you want
+numeric summaries without plotting.
 
 ## Distribution plots
 
@@ -68,8 +70,7 @@ plots = gen_metric_plots(files)
 ```
 
 These are Plotly figures (the same family embedded in the group report).
-Hemisphere-specific aparc files (`lh_*`, `rh_*`) are skipped here in favor of
-the combined aparc table (column names include hemisphere and measure) and
-aseg.
+One figure is created per region in each stats table (`aseg`, `lh_area_aparc`,
+and so on). Combined aparc files are skipped.
 
 For the HTML wrapper, see [Group reports](group-reports.md).

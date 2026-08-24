@@ -31,7 +31,6 @@ trees).
 | `groups` | `None` | Named groups for discovery and comparison |
 | `template` | packaged `group.html` | Path to a Jinja2 HTML template |
 | `sd_threshold` | `3.0` | Flag values beyond mean ± this many SDs |
-| `alpha` | `0.05` | Significance threshold for between-group tests |
 
 If both `subjects` and `groups` are passed, subjects from `groups` are used
 and a warning is logged.
@@ -81,14 +80,14 @@ When group directories differ from `SUBJECTS_DIR`, pyFSViz temporarily sets
 
 - Cohort size, threshold, and (if grouped) per-group counts
 - Outlier subjects, with metric/region and value
-- Quality summary by region (passed / outliers / no data)
-- Between-group comparison when `groups` has two or more names
-- Plotly distributions of aseg/aparc metrics
+- Quality summary by region (passed / outliers / no data), with one tab per
+  stats table
+- Between-group box plots when `groups` is set, with one tab per stats table
+  that was generated (aseg, LH/RH area, volume, thickness, or any extra measure)
+- Plotly outlier/distribution plots, also one tab per stats table
 
-Two-group comparisons use Welch’s t-test. Three or more groups use a one-way
-ANOVA. **p-values require `scipy`**, which is not a hard dependency of
-pyFSViz; without it, group means are still shown and the report notes that
-tests were skipped.
+Group comparison is visual only: each plot shows the value distribution by
+group, with one point per subject. There are no t-tests or p-values.
 
 ## Stats tables
 

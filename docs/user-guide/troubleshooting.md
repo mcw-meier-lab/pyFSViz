@@ -17,7 +17,6 @@ Confirm the tools are sourced as described in [Prerequisites](prerequisites.md).
 | nipype / `flirt` error during Talairach images | FSL not installed or not sourced (`FSLDIR`, `flirt` on `PATH`) |
 | Batch warning that recon-all did not complete | `scripts/recon-all.log` does not end with `finished without error` |
 | Group report missing SynthSeg TIV | No `stats/synthseg.vol.csv`, or no `total intracranial` column in that file |
-| Group comparison without p-values | `scipy` is not installed (optional; means and plots still run) |
 | `skip_existing` left a subject unchanged | `{output_dir}/{subject}/{subject}.html` already exists |
 
 ## Check the environment
