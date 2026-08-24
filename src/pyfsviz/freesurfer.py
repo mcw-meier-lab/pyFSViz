@@ -11,7 +11,7 @@ import textwrap
 from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import fsqc
 import fsqc.createScreenshots
@@ -28,8 +28,9 @@ from nireports.interfaces.reporting.base import SimpleBeforeAfterRPT
 
 from pyfsviz.reports import Template
 from pyfsviz.stats import (
+    _comparison_metric_label,
     check_metrics,
-    compare_group_metrics,
+    compare_group_metrics,  # noqa: F401
     gen_group_comparison_plots,
     gen_metric_plots,
     get_stats,
@@ -161,6 +162,106 @@ def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColorma
     return colors.ListedColormap(lut_tab)
 
 
+def _html_id(*parts: str) -> str:
+    chunks: list[str] = []
+    for part in parts:
+        slug = "".join(ch.lower() if ch.isalnum() else "-" for ch in part)
+        while "--" in slug:
+            slug = slug.replace("--", "-")
+        slug = slug.strip("-")
+        if slug:
+            chunks.append(slug)
+    return "-".join(chunks)
+
+
+def _figure_metric_meta(fig: Any) -> dict[str, str]:
+    meta = getattr(fig.layout, "meta", None)
+    if meta is None:
+        return {}
+    if not isinstance(meta, dict):
+        to_json = getattr(meta, "to_plotly_json", None)
+        meta = to_json() if callable(to_json) else dict(meta)
+    if not isinstance(meta, dict):
+        return {}
+    return {
+        "metric": str(meta.get("metric") or ""),
+        "label": str(meta.get("label") or ""),
+    }
+
+
+def _figure_to_html(fig: Any, *, include_plotlyjs: bool | str) -> str:
+    """Render a Plotly figure as an HTML snippet."""
+    return fig.to_html(
+        full_html=False,
+        include_plotlyjs=include_plotlyjs,
+        config={"responsive": True},
+        default_width="100%",
+        default_height=420,
+    )
+
+
+def _plot_sections(
+    figures: list[Any],
+    *,
+    prefix: str,
+    include_plotlyjs_first: bool = True,
+) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    include_plotlyjs: bool | str = "cdn" if include_plotlyjs_first else False
+    for fig in figures:
+        meta = _figure_metric_meta(fig)
+        metric = meta.get("metric") or "other"
+        label = meta.get("label") or metric.replace("_", " ").title()
+        if metric not in grouped:
+            grouped[metric] = {
+                "id": _html_id(prefix, metric),
+                "label": label,
+                "plots": [],
+            }
+        grouped[metric]["plots"].append(
+            _figure_to_html(fig, include_plotlyjs=include_plotlyjs),
+        )
+        include_plotlyjs = False
+
+    sections: list[dict[str, Any]] = []
+    for info in grouped.values():
+        plots = info["plots"]
+        sections.append(
+            {
+                "id": info["id"],
+                "label": info["label"],
+                "n_plots": len(plots),
+                "plots": plots,
+            },
+        )
+    return sections
+
+
+def _quality_summary_sections(
+    quality_summary: dict[str, dict[str, dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    sections: list[dict[str, Any]] = []
+    for metric_name, metric_data in quality_summary.items():
+        n_outliers = sum(1 for result in metric_data.values() if result.get("status") == "outliers_detected")
+        sections.append(
+            {
+                "id": _html_id("quality", metric_name),
+                "label": _comparison_metric_label(metric_name),
+                "n_outliers": n_outliers,
+                "n_regions": len(metric_data),
+                "regions": metric_data,
+                "active": False,
+            },
+        )
+    if sections:
+        active_index = next(
+            (index for index, section in enumerate(sections) if section["n_outliers"] > 0),
+            0,
+        )
+        sections[active_index]["active"] = True
+    return sections
+
+
 class FreeSurfer:
     """Base class for FreeSurfer data."""
 
@@ -199,7 +300,9 @@ class FreeSurfer:
             self.freesurfer_home = Path(freesurfer_home)
             """Path to the FreeSurfer home directory."""
         if not self.freesurfer_home.exists():
-            raise FileNotFoundError(f"FREESURFER_HOME not found: {self.freesurfer_home}")
+            raise FileNotFoundError(
+                f"FREESURFER_HOME not found: {self.freesurfer_home}",
+            )
         if self.freesurfer_home is None:
             raise ValueError("FREESURFER_HOME must be set")
 
@@ -283,7 +386,9 @@ class FreeSurfer:
 
             subjects = self.get_subjects(search_dir)
             if not subjects:
-                self.logger.warning(f"No FreeSurfer subjects found for group '{group_name}' in {search_dir}")
+                self.logger.warning(
+                    f"No FreeSurfer subjects found for group '{group_name}' in {search_dir}",
+                )
             resolved[group_name] = subjects
 
         return resolved
@@ -306,14 +411,21 @@ class FreeSurfer:
 
         return search_dirs
 
-    def _stats_output_files(self, stats: dict[str, Path | list[Path]], *, prefix: str = "") -> list[Path]:
+    def _stats_output_files(
+        self,
+        stats: dict[str, Path | list[Path]],
+        *,
+        prefix: str = "",
+    ) -> list[Path]:
         stats_files: list[Path] = []
         name_suffix = f"_{prefix}" if prefix else ""
 
         aseg_value = stats.get("aseg")
         if isinstance(aseg_value, Path):
             if name_suffix:
-                dest = aseg_value.with_name(f"{aseg_value.stem}{name_suffix}{aseg_value.suffix}")
+                dest = aseg_value.with_name(
+                    f"{aseg_value.stem}{name_suffix}{aseg_value.suffix}",
+                )
                 shutil.copy2(aseg_value, dest)
                 stats_files.append(dest)
             else:
@@ -323,7 +435,9 @@ class FreeSurfer:
         if isinstance(aparc_value, list):
             for aparc_file in aparc_value:
                 if name_suffix and "combined" not in aparc_file.stem:
-                    dest = aparc_file.with_name(f"{aparc_file.stem}{name_suffix}{aparc_file.suffix}")
+                    dest = aparc_file.with_name(
+                        f"{aparc_file.stem}{name_suffix}{aparc_file.suffix}",
+                    )
                     shutil.copy2(aparc_file, dest)
                     stats_files.append(dest)
                 elif "combined" not in aparc_file.stem:
@@ -539,8 +653,14 @@ class FreeSurfer:
             )
 
         # Clean up/move files
-        shutil.move(f"{output_dir}/screenshots/{subject}/{subject}.png", f"{output_dir}/aparcaseg.png")
-        shutil.move(f"{output_dir}/metrics/{subject}/metrics.csv", f"{output_dir}/metrics.csv")
+        shutil.move(
+            f"{output_dir}/screenshots/{subject}/{subject}.png",
+            f"{output_dir}/aparcaseg.png",
+        )
+        shutil.move(
+            f"{output_dir}/metrics/{subject}/metrics.csv",
+            f"{output_dir}/metrics.csv",
+        )
         shutil.rmtree(f"{output_dir}/screenshots")
         shutil.rmtree(f"{output_dir}/status")
         shutil.rmtree(f"{output_dir}/metrics")
@@ -761,11 +881,19 @@ class FreeSurfer:
                 # Replace NaN values with None for proper Jinja2 handling
                 if metrics:
                     metrics = {k: (None if pd.isna(v) else v) for k, v in metrics.items()}
-            except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, PermissionError, OSError) as e:
+            except (
+                pd.errors.EmptyDataError,
+                pd.errors.ParserError,
+                UnicodeDecodeError,
+                PermissionError,
+                OSError,
+            ) as e:
                 self.logger.warning(f"Could not read metrics.csv: {e}")
 
         _config = {
-            "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d, %H:%M"),
+            "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%d, %H:%M",
+            ),
             "subject": subject,
             "tlrc": tlrc,
             "aseg": aseg,
@@ -837,7 +965,9 @@ class FreeSurfer:
         if subjects is None:
             subjects = self.get_subjects()
 
-        self.logger.info(f"Generating reports with images for {len(subjects)} subjects...")
+        self.logger.info(
+            f"Generating reports with images for {len(subjects)} subjects...",
+        )
         self.logger.info(f"Output directory: {output_dir}")
 
         results: dict[str, Path | Exception] = {}
@@ -846,7 +976,9 @@ class FreeSurfer:
         for i, subject in enumerate(subjects, 1):
             existing_html = output_dir / subject / f"{subject}.html"
             if skip_existing and existing_html.is_file():
-                self.logger.info(f"[{i}/{len(subjects)}] Skipping {subject}: report already exists")
+                self.logger.info(
+                    f"[{i}/{len(subjects)}] Skipping {subject}: report already exists",
+                )
                 results[subject] = existing_html
                 skipped += 1
                 continue
@@ -856,7 +988,9 @@ class FreeSurfer:
             try:
                 # Check if recon-all completed successfully
                 if not self.check_recon_all(subject):
-                    self.logger.warning(f"Subject {subject} recon-all did not complete successfully")
+                    self.logger.warning(
+                        f"Subject {subject} recon-all did not complete successfully",
+                    )
 
                 # Create subject-specific output directory for images
                 subject_output_dir = output_dir / subject
@@ -887,7 +1021,10 @@ class FreeSurfer:
                     shutil.rmtree(temp_tlrc_dir, ignore_errors=True)
 
                     # Generate aparc+aseg plots - save directly to subject directory
-                    aparcaseg = self.gen_aparcaseg_plots(subject, str(subject_output_dir))
+                    aparcaseg = self.gen_aparcaseg_plots(
+                        subject,
+                        str(subject_output_dir),
+                    )
                     img_list.append(aparcaseg)
 
                     # Generate surface plots - save directly to subject directory
@@ -934,7 +1071,6 @@ class FreeSurfer:
         template: str | None = None,
         *,
         sd_threshold: float = 3.0,
-        alpha: float = 0.05,
     ) -> Path:
         """Generate a group report with outlier information for multiple subjects.
 
@@ -946,7 +1082,7 @@ class FreeSurfer:
             List of subject IDs to process. If None, processes all subjects
             in the subjects directory.
         groups : _GroupDefinition | None
-            Optional group definitions for between-group comparisons. Each group
+            Optional group definitions for between-group box plots. Each group
             can be a list of subject IDs or a FreeSurfer directory to scan:
 
             - ``["control", "patient"]`` scans ``subjects_dir/control`` and
@@ -958,8 +1094,6 @@ class FreeSurfer:
             HTML template to use. Default is local group.html.
         sd_threshold : float
             Standard deviation threshold for outlier detection. Default is 3.0.
-        alpha : float
-            Significance threshold for group comparisons. Default is 0.05.
 
         Returns
         -------
@@ -973,7 +1107,9 @@ class FreeSurfer:
         resolved_groups: dict[str, list[str]] | None = None
         if groups is not None:
             if subjects is not None:
-                self.logger.warning("Both subjects and groups were provided; using subjects from groups")
+                self.logger.warning(
+                    "Both subjects and groups were provided; using subjects from groups",
+                )
             group_search_dirs = self._group_search_dirs(groups)
             resolved_groups = self.resolve_groups(groups)
             subjects = [subject for group_subjects in resolved_groups.values() for subject in group_subjects]
@@ -983,48 +1119,55 @@ class FreeSurfer:
         self.logger.info(f"Generating group report for {len(subjects)} subjects...")
         if resolved_groups:
             for group_name, group_subjects in resolved_groups.items():
-                self.logger.info(f"  Group {group_name}: {len(group_subjects)} subject(s)")
+                self.logger.info(
+                    f"  Group {group_name}: {len(group_subjects)} subject(s)",
+                )
         self.logger.info(f"Output directory: {output_dir}")
 
-        stats_files = self._collect_group_stats_files(output_dir, subjects, resolved_groups, group_search_dirs)
+        stats_files = self._collect_group_stats_files(
+            output_dir,
+            subjects,
+            resolved_groups,
+            group_search_dirs,
+        )
 
         # Generate plots
-        plots = gen_metric_plots(stats_files)
+        metric_figures = gen_metric_plots(stats_files)
+        comparison_figures = gen_group_comparison_plots(stats_files, resolved_groups) if resolved_groups else []
+        comparison_plots = _plot_sections(
+            comparison_figures,
+            prefix="cmp",
+            include_plotlyjs_first=bool(comparison_figures),
+        )
+        plot_sections = _plot_sections(
+            metric_figures,
+            prefix="plots",
+            include_plotlyjs_first=not comparison_figures,
+        )
+        plot_htmls = [html for section in plot_sections for html in section["plots"]]
 
-        # Convert Plotly figures to HTML strings
-        plot_htmls = []
-        for fig in plots:
-            plot_htmls.append(fig.to_html(full_html=False, include_plotlyjs=True))
-
-        # Check for outliers
         quality_summary = check_metrics(stats_files, sd_threshold=sd_threshold)
+        quality_sections = _quality_summary_sections(quality_summary)
         outlier_subjects = summarize_outlier_subjects(quality_summary)
-
-        group_comparison = None
-        comparison_plots: list[str] = []
-        if resolved_groups:
-            group_comparison = compare_group_metrics(stats_files, resolved_groups, alpha=alpha)
-            comparison_plots = [
-                fig.to_html(full_html=False, include_plotlyjs=False)
-                for fig in gen_group_comparison_plots(stats_files, resolved_groups)
-            ]
 
         # Prepare template config
         if template is None:
             template = str(files("pyfsviz._internal.html") / "group.html")
 
         _config = {
-            "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d, %H:%M"),
+            "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%d, %H:%M",
+            ),
             "subjects": subjects,
             "num_subjects": len(subjects),
             "groups": resolved_groups,
             "quality_summary": quality_summary,
+            "quality_sections": quality_sections,
             "outlier_subjects": outlier_subjects,
-            "group_comparison": group_comparison,
             "plots": plot_htmls,
+            "plot_sections": plot_sections,
             "comparison_plots": comparison_plots,
             "sd_threshold": sd_threshold,
-            "alpha": alpha,
         }
 
         # Generate HTML file

@@ -20,12 +20,6 @@ from nipype.interfaces.base import (
 )
 from nipype.interfaces.freesurfer.base import FSCommand, FSTraitedSpec
 
-try:
-    from scipy import stats as scipy_stats
-except ImportError:  # pragma: no cover
-    scipy_stats = None
-
-_MIN_GROUP_SAMPLES = 2
 _MIN_GROUPS = 2
 _SYNTHSEG_VOL_CSV = Path("stats") / "synthseg.vol.csv"
 _SYNTHSEG_TIV_COLUMN = "total intracranial"
@@ -33,6 +27,13 @@ _APARC_REPEAT_COLUMNS = ("BrainSegVolNotVent", "eTIV")
 _STATS_ID_COLUMN = "ID"
 _STATS_METADATA_COLUMNS = {_STATS_ID_COLUMN, _SYNTHSEG_TIV_COLUMN, "Measure:volume"}
 _logger = logging.getLogger(__name__)
+
+
+def _plotly_values(values: Any) -> list[Any]:
+    """Return a JSON-friendly list so Plotly HTML does not use binary ``bdata``."""
+    if hasattr(values, "tolist"):
+        return values.tolist()
+    return list(values)
 
 
 def _normalize_subject_id(subject_id: str) -> str:
@@ -48,7 +49,10 @@ def _synthseg_tiv_column(columns: pd.Index) -> str | None:
     return None
 
 
-def _read_synthseg_tiv(subject: str, subjects_dir: str | Path | None = None) -> float | None:
+def _read_synthseg_tiv(
+    subject: str,
+    subjects_dir: str | Path | None = None,
+) -> float | None:
     """Return SynthSeg total intracranial volume for a subject, if available."""
     base = Path(subjects_dir) if subjects_dir is not None else _subjects_dir()
     csv_path = base / _normalize_subject_id(subject) / _SYNTHSEG_VOL_CSV
@@ -68,7 +72,11 @@ def _read_synthseg_tiv(subject: str, subjects_dir: str | Path | None = None) -> 
     id_col = df.columns[0]
     if str(id_col).strip().lower() != _SYNTHSEG_TIV_COLUMN:
         subject_key = _normalize_subject_id(subject)
-        matches = df[df[id_col].map(lambda value: _normalize_subject_id(str(value)) == subject_key)]
+        matches = df[
+            df[id_col].map(
+                lambda value: _normalize_subject_id(str(value)) == subject_key,
+            )
+        ]
         row = matches.iloc[0] if not matches.empty else df.iloc[0]
     else:
         row = df.iloc[0]
@@ -127,7 +135,10 @@ def _subjects_dir() -> Path:
     return Path(os.environ.get("SUBJECTS_DIR", "."))
 
 
-def _subjects_with_stats(subjects: list[str], relative_stats_file: str | Path) -> list[str]:
+def _subjects_with_stats(
+    subjects: list[str],
+    relative_stats_file: str | Path,
+) -> list[str]:
     """Return subjects that have a non-empty stats file under ``SUBJECTS_DIR``."""
     base = _subjects_dir()
     relative_stats_file = Path(relative_stats_file)
@@ -170,7 +181,10 @@ def _add_synthseg_tiv_to_aseg(
     """Add SynthSeg total intracranial volume to an aggregated aseg table."""
     aseg_file = Path(aseg_file)
     if not aseg_file.is_file():
-        _logger.warning("Aseg table %s does not exist; skipping total intracranial insert", aseg_file)
+        _logger.warning(
+            "Aseg table %s does not exist; skipping total intracranial insert",
+            aseg_file,
+        )
         return aseg_file
 
     df = _read_stats_csv(aseg_file)
@@ -188,7 +202,10 @@ def _add_synthseg_tiv_to_aseg(
         if column in df.columns:
             df = df.drop(columns=[column])
         _set_stats_id_column(df).to_csv(aseg_file, index=False)
-        _logger.warning("No SynthSeg total intracranial values found for aseg table %s", aseg_file)
+        _logger.warning(
+            "No SynthSeg total intracranial values found for aseg table %s",
+            aseg_file,
+        )
         return aseg_file
 
     if column in df.columns:
@@ -216,7 +233,10 @@ def _rewrite_stats_id_column(table_file: Path) -> Path:
     """Rewrite a stats CSV so the first column is ``ID`` without collapsing regions."""
     table_file = Path(table_file)
     if not table_file.is_file():
-        _logger.warning("Stats table %s does not exist; skipping ID rewrite", table_file)
+        _logger.warning(
+            "Stats table %s does not exist; skipping ID rewrite",
+            table_file,
+        )
         return table_file
     df = _read_stats_csv(table_file)
     if df.empty or df.columns.empty:
@@ -389,7 +409,10 @@ def _get_aseg_stats(
     if not _stats_table_has_regions(aseg_path):
         usable = _subjects_with_stats(subjects, Path("stats") / "aseg.stats")
         if not usable:
-            _logger.warning("No aseg.stats files found under SUBJECTS_DIR; skipping %s", aseg_path.name)
+            _logger.warning(
+                "No aseg.stats files found under SUBJECTS_DIR; skipping %s",
+                aseg_path.name,
+            )
             return _add_synthseg_tiv_to_aseg(aseg_path, subjects, _subjects_dir())
         if aseg_path.exists():
             aseg_path.unlink()
@@ -428,7 +451,11 @@ def _combine_aparc_tables(table_files: list[Path]) -> pd.DataFrame:
             combined = df
             continue
         overlap = [col for col in df.columns if col in combined.columns and col != _STATS_ID_COLUMN]
-        combined = combined.merge(df.drop(columns=overlap), on=_STATS_ID_COLUMN, how="outer")
+        combined = combined.merge(
+            df.drop(columns=overlap),
+            on=_STATS_ID_COLUMN,
+            how="outer",
+        )
 
     if combined is None:
         return pd.DataFrame()
@@ -488,7 +515,10 @@ def _get_aparc_stats(
         for h in hemis:
             aparc_path = _stats_table_path(output_path, f"{h}_{m}_{tablefile}")
             if not _stats_table_has_regions(aparc_path):
-                usable = _subjects_with_stats(subjects, Path("stats") / f"{h}.{parc}.stats")
+                usable = _subjects_with_stats(
+                    subjects,
+                    Path("stats") / f"{h}.{parc}.stats",
+                )
                 if not usable:
                     _logger.warning(
                         "No %s.%s.stats files found under SUBJECTS_DIR; skipping %s",
@@ -541,7 +571,13 @@ def get_stats(
     """
     stats: dict[str, Path | list[Path]] = {}
     stats["aseg"] = _get_aseg_stats(subjects, "aseg.csv", output_dir=output_dir)
-    stats["aparc"] = _get_aparc_stats(subjects, "aparc.csv", output_dir=output_dir, measures=measures, hemis=hemis)
+    stats["aparc"] = _get_aparc_stats(
+        subjects,
+        "aparc.csv",
+        output_dir=output_dir,
+        measures=measures,
+        hemis=hemis,
+    )
     return stats
 
 
@@ -572,7 +608,14 @@ def _region_columns(data: pd.DataFrame) -> list[str]:
     return [
         col
         for col in data.columns[1:]
-        if col not in ["ID", "Measure:volume", "lh.aparc.a2009s_thickness", "rh.aparc.a2009s_thickness", "hemi"]
+        if col
+        not in [
+            "ID",
+            "Measure:volume",
+            "lh.aparc.a2009s_thickness",
+            "rh.aparc.a2009s_thickness",
+            "hemi",
+        ]
     ]
 
 
@@ -597,35 +640,9 @@ def _group_values(
     return {group_name: np.array(values, dtype=float) for group_name, values in grouped.items()}
 
 
-def _compare_two_groups(values_a: np.ndarray, values_b: np.ndarray, alpha: float) -> dict[str, Any]:
-    summary: dict[str, Any] = {
-        "n_a": len(values_a),
-        "n_b": len(values_b),
-        "mean_a": float(values_a.mean()) if len(values_a) else None,
-        "mean_b": float(values_b.mean()) if len(values_b) else None,
-        "std_a": float(values_a.std(ddof=1)) if len(values_a) > 1 else None,
-        "std_b": float(values_b.std(ddof=1)) if len(values_b) > 1 else None,
-        "p_value": None,
-        "significant": False,
-        "test": None,
-    }
-    if len(values_a) < _MIN_GROUP_SAMPLES or len(values_b) < _MIN_GROUP_SAMPLES:
-        summary["message"] = "Insufficient data for statistical comparison"
-        return summary
-
-    if scipy_stats is None:
-        summary["message"] = "Install scipy for p-values between groups"
-        return summary
-
-    result = scipy_stats.ttest_ind(values_a, values_b, equal_var=False)
-    summary["p_value"] = float(result.pvalue)
-    summary["test"] = "welch_ttest"
-    summary["significant"] = result.pvalue < alpha
-    summary["message"] = f"p={result.pvalue:.4f} ({'significant' if result.pvalue < alpha else 'not significant'})"
-    return summary
-
-
-def summarize_outlier_subjects(quality_summary: dict[str, dict[str, dict[str, Any]]]) -> list[dict[str, Any]]:
+def summarize_outlier_subjects(
+    quality_summary: dict[str, dict[str, dict[str, Any]]],
+) -> list[dict[str, Any]]:
     """Aggregate outlier findings by subject for quick reference.
 
     Parameters
@@ -666,10 +683,8 @@ def summarize_outlier_subjects(quality_summary: dict[str, dict[str, dict[str, An
 def compare_group_metrics(
     stats_files: list[Path],
     groups: dict[str, list[str]],
-    *,
-    alpha: float = 0.05,
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    """Compare FreeSurfer metrics between named subject groups.
+    """Summarize FreeSurfer metrics for named subject groups.
 
     Parameters
     ----------
@@ -677,13 +692,12 @@ def compare_group_metrics(
         Paths to stats CSV files from :func:`get_stats`.
     groups
         Mapping of group name to subject IDs, e.g. ``{"control": [...], "patient": [...]}``.
-    alpha
-        Significance threshold for two-group comparisons.
 
     Returns
     -------
     dict
-        Nested comparison results keyed by metric file and brain region.
+        Nested summaries keyed by metric file and brain region, with per-group
+        ``n``, ``mean``, and ``std``.
     """
     if len(groups) < _MIN_GROUPS:
         msg = "At least two groups are required for comparison"
@@ -697,7 +711,7 @@ def compare_group_metrics(
         comparison[metric_name] = {}
         for region in _region_columns(data):
             grouped_values = _group_values(data, region, groups)
-            region_summary: dict[str, Any] = {
+            comparison[metric_name][region] = {
                 group_name: {
                     "n": len(grouped_values[group_name]),
                     "mean": float(grouped_values[group_name].mean()) if len(grouped_values[group_name]) else None,
@@ -708,47 +722,45 @@ def compare_group_metrics(
                 for group_name in group_names
             }
 
-            if len(group_names) == _MIN_GROUPS:
-                region_summary["comparison"] = _compare_two_groups(
-                    grouped_values[group_names[0]],
-                    grouped_values[group_names[1]],
-                    alpha,
-                )
-            elif scipy_stats is None:
-                region_summary["comparison"] = {
-                    "message": "Install scipy for multi-group ANOVA",
-                    "test": None,
-                    "p_value": None,
-                    "significant": False,
-                }
-            else:
-                samples = [
-                    grouped_values[name] for name in group_names if len(grouped_values[name]) >= _MIN_GROUP_SAMPLES
-                ]
-                if len(samples) >= _MIN_GROUPS:
-                    result = scipy_stats.f_oneway(*samples)
-                    region_summary["comparison"] = {
-                        "test": "one_way_anova",
-                        "p_value": float(result.pvalue),
-                        "significant": result.pvalue < alpha,
-                        "message": (
-                            f"p={result.pvalue:.4f} ({'significant' if result.pvalue < alpha else 'not significant'})"
-                        ),
-                    }
-                else:
-                    region_summary["comparison"] = {
-                        "message": "Insufficient data for multi-group comparison",
-                        "test": None,
-                        "p_value": None,
-                        "significant": False,
-                    }
-
-            comparison[metric_name][region] = region_summary
-
     return comparison
 
 
-def gen_group_comparison_plots(stats_files: list[Path], groups: dict[str, list[str]]) -> list[go.Figure]:
+_APARC_TABLE_SUFFIXES = ("_aparc", ".aparc")
+_HEMI_PREFIXES = (("lh_", "LH"), ("lh.", "LH"), ("rh_", "RH"), ("rh.", "RH"))
+
+
+def _comparison_metric_label(metric_name: str) -> str:
+    """Return a tab label for a stats table stem (``lh_area_aparc``, ``aseg``, …)."""
+    stem = metric_name.strip()
+    lower = stem.lower()
+    if lower == "aseg" or lower.startswith("aseg_"):
+        return "Aseg" if lower == "aseg" else stem.replace("_", " ").title()
+
+    hemi = ""
+    rest = stem
+    for prefix, label in _HEMI_PREFIXES:
+        if lower.startswith(prefix):
+            hemi = label
+            rest = stem[len(prefix) :]
+            break
+
+    rest_lower = rest.lower()
+    for suffix in _APARC_TABLE_SUFFIXES:
+        if rest_lower.endswith(suffix):
+            rest = rest[: -len(suffix)]
+            break
+
+    measure = rest.replace("_", " ").replace(".", " ").strip()
+    measure = measure.title() if measure else stem.replace("_", " ").title()
+    if hemi:
+        return f"{hemi} {measure}".strip()
+    return measure
+
+
+def gen_group_comparison_plots(
+    stats_files: list[Path],
+    groups: dict[str, list[str]],
+) -> list[go.Figure]:
     """Generate Plotly box plots comparing metrics across groups.
 
     Parameters
@@ -761,7 +773,8 @@ def gen_group_comparison_plots(stats_files: list[Path], groups: dict[str, list[s
     Returns
     -------
     list[go.Figure]
-        Plotly figures with one plot per metric region.
+        Plotly figures with one plot per metric region. Each figure stores
+        ``metric`` and ``label`` in ``layout.meta`` for report grouping.
     """
     plots: list[go.Figure] = []
     metrics = _load_metrics(stats_files)
@@ -770,6 +783,7 @@ def gen_group_comparison_plots(stats_files: list[Path], groups: dict[str, list[s
     for metric_name, data in metrics.items():
         id_col = data.columns[0]
         subject_groups = _subject_group_map(groups)
+        label = _comparison_metric_label(metric_name)
 
         for region in _region_columns(data):
             plot_rows = []
@@ -779,10 +793,14 @@ def gen_group_comparison_plots(stats_files: list[Path], groups: dict[str, list[s
                 value = row[region]
                 if group_name is None or pd.isna(value):
                     continue
+                try:
+                    numeric = float(value)
+                except (TypeError, ValueError):
+                    continue
                 plot_rows.append(
                     {
                         "group": group_name,
-                        "value": float(value),
+                        "value": numeric,
                         "subject_id": subject_id,
                     },
                 )
@@ -798,18 +816,21 @@ def gen_group_comparison_plots(stats_files: list[Path], groups: dict[str, list[s
                     continue
                 fig.add_trace(
                     go.Box(
-                        y=group_data["value"],
+                        y=_plotly_values(group_data["value"].astype(float)),
                         name=group_name,
-                        text=group_data["subject_id"],
+                        text=_plotly_values(group_data["subject_id"].astype(str)),
                         boxpoints="all",
                     ),
                 )
 
             fig.update_layout(
+                autosize=True,
+                height=420,
                 boxmode="group",
-                title={"text": f"{metric_name}: {region}"},
+                title={"text": region},
                 yaxis={"title": {"text": region}},
                 xaxis={"title": {"text": "Group"}},
+                meta={"metric": metric_name, "label": label},
             )
             plots.append(fig)
 
@@ -837,7 +858,13 @@ def check_metrics(stats_files: list[Path], sd_threshold: float = 3.0) -> dict:
         region_cols = [
             col
             for col in data.columns[1:]
-            if col not in ["ID", "Measure:volume", "lh.aparc.a2009s_thickness", "rh.aparc.a2009s_thickness"]
+            if col
+            not in [
+                "ID",
+                "Measure:volume",
+                "lh.aparc.a2009s_thickness",
+                "rh.aparc.a2009s_thickness",
+            ]
         ]
         id_col = data.columns[0]
 
@@ -906,6 +933,14 @@ def check_metrics(stats_files: list[Path], sd_threshold: float = 3.0) -> dict:
     return metric_summary
 
 
+def _stamp_plot_meta(fig: go.Figure, metric_name: str) -> None:
+    fig.update_layout(
+        autosize=True,
+        height=420,
+        meta={"metric": metric_name, "label": _comparison_metric_label(metric_name)},
+    )
+
+
 def gen_metric_plots(stats_files: list[Path]) -> list:
     """Generate plots from FreeSurfer stats files.
 
@@ -920,57 +955,48 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
         List of plotly figure objects
     """
     plots = []
-    metrics = {}
-    for file in stats_files:
-        if "lh" in file.stem or "rh" in file.stem or not file.is_file():
-            continue
-        try:
-            df = _read_stats_csv(file)
-        except (pd.errors.ParserError, OSError, UnicodeDecodeError):
-            continue
-        if df.empty or df.columns.empty:
-            continue
-        metrics[file.stem] = df
+    metrics = _load_metrics(stats_files)
 
     for metric, data in metrics.items():
         idx_col = data.columns[0]
         if "hemi" in data.columns:
-            for c in data.columns[1:]:
+            for c in _region_columns(data):
                 fig = go.Figure()
                 fig.add_trace(
                     go.Box(
-                        y=data[data["hemi"] == "lh"][c],
+                        y=_plotly_values(data[data["hemi"] == "lh"][c]),
                         boxpoints="suspectedoutliers",
                         marker={
                             "outliercolor": "rgb(0,0,0)",
                             "line": {"outlierwidth": 1, "outliercolor": "rgb(0,0,0)"},
                         },
                         name="lh",
-                        text=data[idx_col],
+                        text=_plotly_values(data[data["hemi"] == "lh"][idx_col]),
                     ),
                 )
                 fig.add_trace(
                     go.Box(
-                        y=data[data["hemi"] == "rh"][c],
+                        y=_plotly_values(data[data["hemi"] == "rh"][c]),
                         boxpoints="suspectedoutliers",
                         marker={
                             "outliercolor": "rgb(0,0,0)",
                             "line": {"outlierwidth": 1, "outliercolor": "rgb(0,0,0)"},
                         },
                         name="rh",
-                        text=data[idx_col],
+                        text=_plotly_values(data[data["hemi"] == "rh"][idx_col]),
                     ),
                 )
                 fig.update_layout(
                     boxmode="group",
                     yaxis={"title": {"text": c}},
                     xaxis={"title": {"text": "hemisphere"}},
-                    title={"text": metric},
+                    title={"text": c},
                 )
+                _stamp_plot_meta(fig, metric)
                 plots.append(fig)
         elif any("Left-" in c for c in data.columns):
             region_groups: dict[str, dict[str, str]] = {}
-            for region in data.columns[1:]:  # Skip subject_id column
+            for region in _region_columns(data):
                 # Extract base region name (remove hemisphere prefix if present)
                 if region.startswith("Left-"):
                     base_region = region[5:]  # Remove 'Left-' prefix
@@ -1008,25 +1034,39 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                         # Create box plot comparing hemispheres
                         fig.add_trace(
                             go.Box(
-                                y=plot_data[plot_data["hemisphere"] == "Left"]["value"],
+                                y=_plotly_values(
+                                    plot_data[plot_data["hemisphere"] == "Left"]["value"],
+                                ),
                                 boxpoints="suspectedoutliers",
-                                text=plot_data[idx_col],
+                                text=_plotly_values(
+                                    plot_data[plot_data["hemisphere"] == "Left"][idx_col],
+                                ),
                                 name="left",
                                 marker={
                                     "outliercolor": "rgb(0,0,0)",
-                                    "line": {"outlierwidth": 1, "outliercolor": "rgb(0,0,0)"},
+                                    "line": {
+                                        "outlierwidth": 1,
+                                        "outliercolor": "rgb(0,0,0)",
+                                    },
                                 },
                             ),
                         )
                         fig.add_trace(
                             go.Box(
-                                y=plot_data[plot_data["hemisphere"] == "Right"]["value"],
+                                y=_plotly_values(
+                                    plot_data[plot_data["hemisphere"] == "Right"]["value"],
+                                ),
                                 boxpoints="suspectedoutliers",
-                                text=plot_data[idx_col],
+                                text=_plotly_values(
+                                    plot_data[plot_data["hemisphere"] == "Right"][idx_col],
+                                ),
                                 name="right",
                                 marker={
                                     "outliercolor": "rgb(0,0,0)",
-                                    "line": {"outlierwidth": 1, "outliercolor": "rgb(0,0,0)"},
+                                    "line": {
+                                        "outlierwidth": 1,
+                                        "outliercolor": "rgb(0,0,0)",
+                                    },
                                 },
                             ),
                         )
@@ -1034,33 +1074,41 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                             boxmode="group",
                             yaxis={"title": {"text": base_region}},
                             xaxis={"title": {"text": "hemisphere"}},
+                            title={"text": base_region},
                         )
+                        _stamp_plot_meta(fig, metric)
                         plots.append(fig)
                 else:
                     region_col = next(iter(hemispheres.values()))
                     fig.add_trace(
                         go.Box(
-                            y=data[region_col],
+                            y=_plotly_values(data[region_col]),
                             boxpoints="suspectedoutliers",
-                            text=data[idx_col],
+                            text=_plotly_values(data[idx_col]),
                             name=base_region,
                             marker={
                                 "outliercolor": "rgb(0,0,0)",
-                                "line": {"outlierwidth": 1, "outliercolor": "rgb(0,0,0)"},
+                                "line": {
+                                    "outlierwidth": 1,
+                                    "outliercolor": "rgb(0,0,0)",
+                                },
                             },
                         ),
                     )
-                    fig.update_layout(yaxis={"title": {"text": base_region}})
+                    fig.update_layout(
+                        yaxis={"title": {"text": base_region}},
+                        title={"text": base_region},
+                    )
+                    _stamp_plot_meta(fig, metric)
                     plots.append(fig)
         else:
-            # Handle aseg data (no hemisphere prefix)
-            for region in data.columns[1:]:  # Skip subject_id column
+            for region in _region_columns(data):
                 fig = go.Figure()
                 fig.add_trace(
                     go.Box(
-                        y=data[region],
+                        y=_plotly_values(data[region]),
                         boxpoints="suspectedoutliers",
-                        text=data[idx_col],  # subject_id column
+                        text=_plotly_values(data[idx_col]),
                         name=region,
                         marker={
                             "outliercolor": "rgb(0,0,0)",
@@ -1070,8 +1118,9 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                 )
                 fig.update_layout(
                     yaxis={"title": {"text": region}},
-                    title={"text": metric},
+                    title={"text": region},
                 )
+                _stamp_plot_meta(fig, metric)
                 plots.append(fig)
 
     return plots
