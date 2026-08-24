@@ -18,6 +18,7 @@ Confirm the tools are sourced as described in [Prerequisites](prerequisites.md).
 | Batch warning that recon-all did not complete | `scripts/recon-all.log` does not end with `finished without error` |
 | Group report missing SynthSeg TIV | No `stats/synthseg.vol.csv`, or no `total intracranial` column in that file |
 | `skip_existing` left a subject unchanged | `{output_dir}/{subject}/{subject}.html` already exists |
+| Individual report has no Metrics table | `metrics.csv` was not next to the HTML; regenerate HTML (`gen_images=False` is enough after this fix) |
 
 ## Check the environment
 

@@ -417,13 +417,12 @@ class TestHTMLReportGeneration:
             html_content = f.read()
 
         # Check that timestamp is present and properly formatted
-        assert "Date and time:" in html_content
+        assert "Report generated" in html_content
 
-        # Extract timestamp from HTML
-        timestamp_match = re.search(r"Date and time: ([^.]*)\.", html_content)
+        timestamp_match = re.search(r"Report generated</th><td>([^<]+)</td>", html_content)
         assert timestamp_match is not None
 
-        timestamp_str = timestamp_match.group(1)
+        timestamp_str = timestamp_match.group(1).strip()
 
         # Try to parse the timestamp to ensure it's valid
         try:
@@ -471,6 +470,35 @@ class TestHTMLReportGeneration:
         assert "RH Inflated" in html_content
         assert "LH White Matter" in html_content
         assert "RH White Matter" in html_content
+
+    def test_individual_template_renders_aparc_legend(self) -> None:
+        """Surfaces section should list aparc region colors when provided."""
+        actual_template = files("pyfsviz._internal.html") / "individual.html"
+        html = Template(str(actual_template)).compile(
+            {
+                "timestamp": "2026-01-01, 00:00",
+                "subject": "sub-001",
+                "summary": {
+                    "subject": "sub-001",
+                    "recon_status": "passed",
+                    "recon_status_label": "Finished without error",
+                    "talairach_check": "passed",
+                    "talairach_check_label": "Passed",
+                    "generated_at": "2026-01-01, 00:00",
+                },
+                "tlrc": [],
+                "aseg": [],
+                "surf": [("LH Pial", "lh_pial.png")],
+                "surf_legend": [{"name": "precentral", "color": "#dc1464"}],
+                "metrics": None,
+            },
+        )
+        assert "aparc-legend" in html
+        assert "aparc-legend-float" in html
+        assert "has-legend" in html
+        assert "precentral" in html
+        assert "#dc1464" in html
+        assert "Desikan" in html
 
     def test_gen_html_report_with_actual_template(
         self,
@@ -520,7 +548,7 @@ class TestHTMLReportGeneration:
         assert "Aparc+Aseg Parcellations" in html_content
         assert "Surfaces" in html_content
         assert "Summary" in html_content
-        assert "Date and time:" in html_content
+        assert "Report generated" in html_content
 
         # Check for Bootstrap CSS and JS
         assert "bootstrap" in html_content.lower()
@@ -533,6 +561,28 @@ class TestHTMLReportGeneration:
         assert "Talairach Registration" in html_content
         assert "Aparc+Aseg Parcellations" in html_content
         assert "Surfaces" in html_content
+
+    def test_gen_html_report_aparcaseg_is_zoomable(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Aparc+aseg mosaic should be click-to-zoom in the default template."""
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (4, 4), color="black").save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=list(mock_img_dir.glob("*")),
+        )
+        html_content = html_file.read_text(encoding="utf-8")
+
+        assert "aparcaseg.png" in html_content
+        assert "js-zoom-image" in html_content
+        assert 'id="zoom-overlay"' in html_content
+        assert "Click the mosaic to zoom" in html_content
 
     def test_gen_html_report_return_path(self, mock_freesurfer_instance: FreeSurfer, temp_output_dir: Path) -> None:
         """Test that gen_html_report returns the correct Path object."""
@@ -624,6 +674,57 @@ class TestHTMLReportGeneration:
         # Check that Metrics is in navigation
         assert 'href="#metrics"' in html_content
 
+    def test_gen_html_report_reads_metrics_from_subject_dir(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """metrics.csv next to the subject HTML should populate the metrics table."""
+        mock_img_dir = temp_output_dir / "mock_imgs"
+        mock_img_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (1, 1), color="black").save(mock_img_dir / "aparcaseg.png", "PNG")
+
+        subject_dir = temp_output_dir / "sub-001"
+        subject_dir.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            {
+                "subject": ["sub-001"],
+                "wm_snr_orig": [10.134],
+                "holes_lh": [5],
+                "rot_tal_x": [-0.160826],
+                "rot_tal_y": [0.056567],
+                "rot_tal_z": [-0.075648],
+            },
+        ).to_csv(subject_dir / "metrics.csv", index=False)
+
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=list(mock_img_dir.glob("*")),
+        )
+        html_content = html_file.read_text(encoding="utf-8")
+
+        assert "WM SNR (Original)" in html_content
+        assert "10.134" in html_content
+        assert "Talairach rotation" in html_content
+        assert "Report generated" in html_content
+
+    def test_gen_html_report_summary_from_subject_tree(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Summary card should include recon status from the subject tree."""
+        html_file = mock_freesurfer_instance.gen_html_report(
+            subject="sub-001",
+            output_dir=str(temp_output_dir),
+            img_list=[],
+        )
+        html_content = html_file.read_text(encoding="utf-8")
+        assert "sub-001" in html_content
+        assert "Finished without error" in html_content
+        assert "Talairach check" in html_content
+
     def test_gen_html_report_without_metrics(
         self,
         mock_freesurfer_instance: FreeSurfer,
@@ -657,9 +758,9 @@ class TestHTMLReportGeneration:
         with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
-        # Check that metrics section is not present (or is empty)
-        # The template checks {% if metrics %} so if metrics is None, section won't render
-        assert "FreeSurfer: Individual Report" in html_content
+        assert 'id="metrics"' in html_content
+        assert "No fsqc" in html_content
+        assert "WM SNR (Original)" not in html_content
 
     def test_gen_html_report_metrics_subject_filtering(
         self,
@@ -1108,3 +1209,28 @@ class TestBatchReportGeneration:
         html_file = results[subject]
         assert isinstance(html_file, Path)
         assert html_file.read_text(encoding="utf-8") != "already generated"
+
+    def test_gen_batch_reports_reuses_existing_png_and_svg(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """gen_images=False should find PNG/SVG files in the subject output directory."""
+        reports_dir = temp_output_dir / "reports"
+        subject_dir = reports_dir / "sub-001"
+        subject_dir.mkdir(parents=True, exist_ok=True)
+        (subject_dir / "tlrc.svg").write_text("<svg><text>Talairach</text></svg>", encoding="utf-8")
+        Image.new("RGB", (4, 4), color="black").save(subject_dir / "aparcaseg.png", "PNG")
+
+        results = mock_freesurfer_instance.gen_batch_reports(
+            output_dir=reports_dir,
+            subjects=["sub-001"],
+            gen_images=False,
+        )
+
+        html_file = results["sub-001"]
+        assert isinstance(html_file, Path)
+        html_content = html_file.read_text(encoding="utf-8")
+        assert "aparcaseg.png" in html_content
+        assert "js-zoom-image" in html_content
+        assert "Talairach" in html_content

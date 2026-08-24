@@ -69,6 +69,27 @@ Open `{output_dir}/{subject}/{subject}.html` in a browser. Images are
 referenced next to the HTML file, so keep that directory together if you copy
 reports.
 
+The `aparc+aseg` mosaic is shown at page width. Click it to inspect slices at
+higher magnification: drag to pan, scroll to zoom, Esc or **Close** to return.
+
+Surface views are colored with the subject's `aparc` annotation. A region
+legend sits in a sticky sidebar next to those plots so it stays visible
+while you scroll. Regenerating surface images (`gen_images=True`) is needed
+if older PNGs were colored with the full FreeSurfer LUT instead of
+annotation colors.
+
+The **Summary** card is filled from the subject tree (`scripts/`,
+`stats/aseg.stats`, Talairach transforms) plus fsqc rotation when
+`metrics.csv` is present. The **Metrics** table is the fsqc row from
+`{output_dir}/{subject}/metrics.csv` (written by `gen_aparcaseg_plots`).
+Older reports that only have `metrics.csv` at the reports root still work.
+
+To refresh HTML after a pyFSViz update without rerunning screenshots:
+
+```python
+fs.gen_batch_reports("reports/", gen_images=False)
+```
+
 ## Output layout
 
 ```text
@@ -77,6 +98,7 @@ reports/
     sub-001.html
     tlrc.svg
     aparcaseg.png
+    metrics.csv
     lh_pial.png
     lh_infl.png
     lh_white.png
@@ -108,11 +130,14 @@ fs.gen_html_report(subject, "reports/", img_list=imgs)
 
 To skip regenerating images in a batch run, use
 `gen_batch_reports(..., gen_images=False)` when each subject output directory
-already contains the PNG/SVG files.
+already contains the PNG/SVG files. That is enough to pick up HTML-only
+changes such as mosaic zoom; leave `skip_existing=False` so existing
+`{subject}.html` files are rewritten.
 
 ## Custom templates
 
 Pass `template=` to `gen_batch_reports` or `gen_html_report` with a path to a
-Jinja2 file. The default template receives `timestamp`, `subject`, `tlrc`
-(SVG markup), `aseg` (image filenames), `surf` (label, filename pairs), and
-`metrics` (optional dict).
+Jinja2 file. The default template receives `timestamp`, `subject`, `summary`
+(recon-all status, FreeSurfer version, command, Talairach check, eTIV, …),
+`tlrc` (SVG markup), `aseg` (image filenames), `surf` (label, filename pairs),
+`surf_legend` (aparc name/color pairs), and `metrics` (optional fsqc dict).

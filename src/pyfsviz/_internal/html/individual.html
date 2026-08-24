@@ -53,6 +53,130 @@ div#accordionOther {
     max-width: 450px;
 }
 
+.summary-table th {
+  width: 28%;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.summary-command {
+  word-break: break-word;
+  font-size: 0.9em;
+}
+.summary-status-passed { color: #137333; font-weight: 600; }
+.summary-status-failed { color: #c5221f; font-weight: 600; }
+.summary-status-unknown { color: #666; }
+.summary-flag { color: #b34700; font-weight: 600; }
+
+.surf-layout.has-legend {
+  display: grid;
+  grid-template-columns: minmax(13rem, 16.5rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.aparc-legend-float {
+  position: sticky;
+  top: 3.5rem;
+  z-index: 1020;
+  max-height: calc(100vh - 4.25rem);
+  overflow: auto;
+  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12);
+}
+.aparc-legend-float .card-body {
+  padding: 0.75rem;
+}
+.aparc-legend {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.15rem 0.5rem;
+  font-size: 0.8rem;
+}
+.aparc-legend-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.aparc-swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-right: 0.4rem;
+  flex: 0 0 0.85rem;
+  border: 1px solid #888;
+}
+@media (max-width: 767.98px) {
+  .surf-layout.has-legend {
+    grid-template-columns: 1fr;
+  }
+  .aparc-legend-float {
+    top: 3.5rem;
+    max-height: 30vh;
+  }
+  .aparc-legend {
+    grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  }
+}
+@media print {
+  .aparc-legend-float {
+    position: static;
+    max-height: none;
+    box-shadow: none;
+  }
+}
+
+.js-zoom-image {
+  cursor: zoom-in;
+}
+.zoom-hint {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+}
+.zoom-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.92);
+  overflow: hidden;
+  cursor: grab;
+}
+.zoom-overlay.is-open {
+  display: block;
+}
+.zoom-overlay.is-dragging {
+  cursor: grabbing;
+}
+.zoom-overlay-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem;
+}
+.zoom-overlay-close {
+  color: #fff;
+  background: #343a40;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+.zoom-overlay-stage {
+  position: absolute;
+  inset: 3.25rem 0 0 0;
+  overflow: hidden;
+}
+.zoom-overlay-stage img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 </style>
 </head>
 <body>
@@ -75,12 +199,57 @@ div#accordionOther {
 
 <h1 class="mt-5 mb-5">FreeSurfer: Individual Report</h1>
 
-<div class="card mt-3" style="width: 480pt;">
+<div class="card mt-3">
     <h2 id="summary" class="card-header">Summary</h2>
     <div class="card-body">
-        <ul class="simple">
-        <li>Date and time: {{ timestamp }}.</li>
-        </ul>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped table-bordered summary-table mb-0">
+                <tbody>
+                    <tr><th>Subject</th><td>{{ summary.subject }}</td></tr>
+                    <tr>
+                        <th>recon-all</th>
+                        <td class="summary-status-{{ summary.recon_status }}">{{ summary.recon_status_label }}</td>
+                    </tr>
+                    {% if summary.finished_at %}
+                    <tr><th>Finished</th><td>{{ summary.finished_at }}</td></tr>
+                    {% endif %}
+                    {% if summary.runtime_label %}
+                    <tr><th>Runtime</th><td>{{ summary.runtime_label }}</td></tr>
+                    {% endif %}
+                    {% if summary.fs_version %}
+                    <tr><th>FreeSurfer version</th><td><code>{{ summary.fs_version }}</code></td></tr>
+                    {% endif %}
+                    {% if summary.fs_version_lastcall %}
+                    <tr><th>Last-call version</th><td><code>{{ summary.fs_version_lastcall }}</code></td></tr>
+                    {% endif %}
+                    {% if summary.command %}
+                    <tr><th>Command</th><td class="summary-command"><code>{{ summary.command }}</code></td></tr>
+                    {% endif %}
+                    <tr>
+                        <th>Talairach check</th>
+                        <td class="summary-status-{{ summary.talairach_check }}">{{ summary.talairach_check_label }}</td>
+                    </tr>
+                    {% if summary.talairach_rotation %}
+                    <tr>
+                        <th>Talairach rotation</th>
+                        <td{% if summary.talairach_rotation_flagged %} class="summary-flag"{% endif %}>
+                            {{ summary.talairach_rotation }}{% if summary.talairach_rotation_flagged %} (large){% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if summary.etiv_label %}
+                    <tr><th>eTIV</th><td>{{ summary.etiv_label }}</td></tr>
+                    {% endif %}
+                    {% if summary.brainseg_label %}
+                    <tr><th>BrainSegVolNotVent</th><td>{{ summary.brainseg_label }}</td></tr>
+                    {% endif %}
+                    {% if summary.edits %}
+                    <tr><th>Edits</th><td>{{ summary.edits|join(", ") }}</td></tr>
+                    {% endif %}
+                    <tr><th>Report generated</th><td>{{ summary.generated_at }}</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -119,6 +288,8 @@ div#accordionOther {
         </div>
     </div>
 </div>
+{% else %}
+<p class="text-muted">No fsqc <code>metrics.csv</code> found next to this report. Re-run image generation, or copy the subject <code>metrics.csv</code> into the subject output directory.</p>
 {% endif %}
 
 <h2 id="tlrc" class="mt-5 mb-2">Talairach Registration</h2>
@@ -138,25 +309,167 @@ div#accordionOther {
 {% for img_path in aseg %}
     <div class="card mt-2">
         <div id="report-aseg" class="card-body">
-        <img src="{{ img_path }}" alt="Aparc+Aseg Parcellations" class="img-fluid" style="width: 100%;" />
+        <p class="zoom-hint">Click the mosaic to zoom. Drag to pan, scroll to zoom further, Esc to close.</p>
+        <img src="{{ img_path }}" alt="Aparc+Aseg Parcellations" class="img-fluid js-zoom-image" style="width: 100%;" tabindex="0" role="button" />
         </div>
     </div>
 {% endfor %}
 
+<div id="zoom-overlay" class="zoom-overlay" aria-hidden="true">
+  <div class="zoom-overlay-toolbar">
+    <button type="button" class="zoom-overlay-close" id="zoom-overlay-close">Close</button>
+  </div>
+  <div class="zoom-overlay-stage" id="zoom-overlay-stage">
+    <img id="zoom-overlay-img" alt="Aparc+Aseg Parcellations (zoomed)" />
+  </div>
+</div>
+
 <h2 id="surf" class="mt-5 mb-2">Surfaces</h2>
+<div class="surf-layout{% if surf_legend %} has-legend{% endif %}">
+{% if surf_legend %}
+    <aside class="card mt-2 aparc-legend-float" aria-label="Aparc region legend">
+        <div class="card-body">
+        <p class="text-muted small mb-2">Desikan–Killiany (<code>aparc</code>) colors. Stays visible while you scroll the surfaces.</p>
+        <div class="aparc-legend">
+            {% for item in surf_legend %}
+            <div class="aparc-legend-item">
+                <span class="aparc-swatch" style="background: {{ item.color }};"></span>
+                {{ item.name }}
+            </div>
+            {% endfor %}
+        </div>
+        </div>
+    </aside>
+{% endif %}
+    <div class="surf-images">
 {% for label, img_path in surf %}
     <div class="card mt-2">
-        <h4 id="surf" class="mt-5 mb-2">{{ label }}</h4>
+        <h4 class="mt-3 mb-2">{{ label }}</h4>
         <div id="report-{{ label }}" class="card-body">
         <img src="{{ img_path }}" alt="{{ label }}" class="img-fluid" style="width: 100%;" />
         </div>
     </div>
 {% endfor %}
-
-</div>
-</div>
+    </div>
 </div>
 
+</div>
+</div>
+</div>
+
+<script type="text/javascript">
+(function () {
+  var overlay = document.getElementById("zoom-overlay");
+  var stage = document.getElementById("zoom-overlay-stage");
+  var img = document.getElementById("zoom-overlay-img");
+  var closeBtn = document.getElementById("zoom-overlay-close");
+  if (!overlay || !stage || !img) {
+    return;
+  }
+
+  var scale = 1;
+  var tx = 0;
+  var ty = 0;
+  var dragging = false;
+  var lastX = 0;
+  var lastY = 0;
+  var minScale = 0.2;
+  var maxScale = 8;
+
+  function applyTransform() {
+    img.style.transform = "translate(-50%, -50%) translate(" + tx + "px, " + ty + "px) scale(" + scale + ")";
+  }
+
+  function fitScale() {
+    if (!img.naturalWidth || !img.naturalHeight || !stage.clientWidth || !stage.clientHeight) {
+      return 1;
+    }
+    return Math.min(stage.clientWidth / img.naturalWidth, stage.clientHeight / img.naturalHeight);
+  }
+
+  function openZoom(src) {
+    function setScale() {
+      scale = Math.min(maxScale, Math.max(fitScale() * 2.5, fitScale()));
+      tx = 0;
+      ty = 0;
+      applyTransform();
+    }
+    img.onload = setScale;
+    overlay.classList.add("is-open");
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    if (img.getAttribute("src") === src && img.complete) {
+      setScale();
+    } else {
+      img.src = src;
+    }
+  }
+
+  function closeZoom() {
+    overlay.classList.remove("is-open");
+    overlay.classList.remove("is-dragging");
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    dragging = false;
+  }
+
+  document.querySelectorAll(".js-zoom-image").forEach(function (el) {
+    el.addEventListener("click", function () {
+      openZoom(el.getAttribute("src"));
+    });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openZoom(el.getAttribute("src"));
+      }
+    });
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closeZoom);
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      closeZoom();
+    }
+  });
+
+  stage.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var factor = e.deltaY > 0 ? 0.9 : 1.1;
+    scale = Math.min(maxScale, Math.max(minScale, scale * factor));
+    applyTransform();
+  }, { passive: false });
+
+  stage.addEventListener("mousedown", function (e) {
+    if (e.button !== 0) {
+      return;
+    }
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    overlay.classList.add("is-dragging");
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", function (e) {
+    if (!dragging) {
+      return;
+    }
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    applyTransform();
+  });
+
+  document.addEventListener("mouseup", function () {
+    dragging = false;
+    overlay.classList.remove("is-dragging");
+  });
+})();
+</script>
 
 </body>
 </html>
