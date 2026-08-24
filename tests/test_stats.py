@@ -1,6 +1,7 @@
 """Tests for FreeSurfer stats functions."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -9,8 +10,11 @@ import pytest
 from pyfsviz.stats import (
     _add_synthseg_tiv_to_aseg,
     _combine_aparc_tables,
+    _get_aparc_stats,
+    _get_aseg_stats,
     _read_synthseg_tiv,
     _rewrite_stats_id_column,
+    _stats_table_path,
     check_metrics,
     compare_group_metrics,
     gen_group_comparison_plots,
@@ -372,6 +376,12 @@ def _write_synthseg_csv(path: Path, *, subject: str, tiv: float, include_subject
         ).to_csv(path, index=False)
 
 
+def _touch_fs_stats(subjects_dir: Path, subject: str, filename: str) -> None:
+    path = subjects_dir / subject / "stats" / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# dummy FreeSurfer stats\n", encoding="utf-8")
+
+
 def _write_aparc_table(
     path: Path,
     *,
@@ -450,6 +460,16 @@ class TestCombineAparcTables:
         assert combined.loc[combined["ID"] == "sub-001", "lh_bankssts_thickness"].iloc[0] == pytest.approx(2.4)
         assert combined.loc[combined["ID"] == "sub-002", "rh_bankssts_volume"].iloc[0] == pytest.approx(1250.0)
 
+    def test_combine_aparc_tables_skips_missing_files(self, temp_output_dir: Path) -> None:
+        """Missing aparc tables are ignored when building the combined file."""
+        lh_area = temp_output_dir / "lh_area_aparc.csv"
+        pd.DataFrame({"ID": ["sub-001"], "lh_bankssts_area": [245.0]}).to_csv(lh_area, index=False)
+
+        combined = _combine_aparc_tables([lh_area, temp_output_dir / "rh_area_aparc.csv"])
+
+        assert list(combined["ID"]) == ["sub-001"]
+        assert combined.loc[0, "lh_bankssts_area"] == pytest.approx(245.0)
+
     def test_combine_aparc_tables_empty(self) -> None:
         """No input tables yields an empty frame."""
         combined = _combine_aparc_tables([])
@@ -509,6 +529,140 @@ class TestSynthSegTIV:
         assert df.loc[df["ID"] == "sub-002", "total intracranial"].iloc[0] == pytest.approx(1600000.0)
         assert pd.isna(df.loc[df["ID"] == "sub-003", "total intracranial"].iloc[0])
 
+    def test_add_synthseg_tiv_does_not_use_etiv(self, temp_output_dir: Path) -> None:
+        """Do not copy EstimatedTotalIntraCranialVol into the SynthSeg TIV column."""
+        aseg_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame(
+            {
+                "Measure:volume": ["sub-001"],
+                "Left-Lateral-Ventricle": [5000.0],
+                "EstimatedTotalIntraCranialVol": [1500000.0],
+                "total intracranial": [None],
+            },
+        ).to_csv(aseg_file, index=False)
+
+        result = _add_synthseg_tiv_to_aseg(aseg_file, ["sub-001"], temp_output_dir)
+        df = pd.read_csv(result)
+
+        assert "total intracranial" not in df.columns
+        assert df.loc[0, "EstimatedTotalIntraCranialVol"] == pytest.approx(1500000.0)
+
+    def test_read_synthseg_tiv_tab_separated(self, temp_output_dir: Path) -> None:
+        """Read SynthSeg TIV from a tab-delimited volume file."""
+        path = temp_output_dir / "sub-001" / "stats" / "synthseg.vol.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("subject\ttotal intracranial\nsub-001\t1500123.4\n", encoding="utf-8")
+
+        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(1500123.4)
+
+    def test_add_synthseg_tiv_skips_missing_aseg(self, temp_output_dir: Path) -> None:
+        """Do not invent an ID-only aseg table when the real file is missing."""
+        aseg_file = temp_output_dir / "reports" / "aseg.csv"
+        assert not aseg_file.exists()
+
+        result = _add_synthseg_tiv_to_aseg(aseg_file, ["sub-001"], temp_output_dir)
+
+        assert result == aseg_file
+        assert not aseg_file.exists()
+
+    def test_stats_table_path_does_not_nest_output_dir(self, temp_output_dir: Path) -> None:
+        """Nipype table paths must not be joined onto output_dir a second time."""
+        nested = _stats_table_path(temp_output_dir / "reports", temp_output_dir / "reports" / "aseg.csv")
+        relative = _stats_table_path("reports", Path("reports") / "aseg.csv")
+
+        assert nested == temp_output_dir / "reports" / "aseg.csv"
+        assert relative == Path("reports") / "aseg.csv"
+
+    def test_get_aseg_stats_reuses_existing_table(
+        self,
+        temp_output_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Skip asegstats2table when group reports have already written aseg.csv."""
+        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
+        _write_synthseg_csv(
+            temp_output_dir / "sub-001" / "stats" / "synthseg.vol.csv",
+            subject="sub-001",
+            tiv=1500000.0,
+        )
+        aseg_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame(
+            {
+                "Measure:volume": ["sub-001"],
+                "Left-Lateral-Ventricle": [5000.0],
+            },
+        ).to_csv(aseg_file, index=False)
+
+        with patch("pyfsviz.stats.AsegStats") as mock_aseg:
+            result = _get_aseg_stats(["sub-001"], "aseg.csv", output_dir=str(temp_output_dir))
+
+        mock_aseg.assert_not_called()
+        df = pd.read_csv(result)
+        assert result == aseg_file
+        assert list(df.columns[:2]) == ["ID", "total intracranial"]
+        assert df.loc[0, "total intracranial"] == pytest.approx(1500000.0)
+
+    def test_get_aseg_stats_regenerates_stub_table(
+        self,
+        temp_output_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Re-run asegstats2table when an existing table has no region columns."""
+        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
+        _touch_fs_stats(temp_output_dir, "sub-001", "aseg.stats")
+        aseg_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame({"ID": ["sub-001"]}).to_csv(aseg_file, index=False)
+
+        def _write_real_table(*_args: object, **_kwargs: object) -> dict:
+            pd.DataFrame(
+                {
+                    "Measure:volume": ["sub-001"],
+                    "Left-Lateral-Ventricle": [5000.0],
+                },
+            ).to_csv(aseg_file, index=False)
+            return {}
+
+        with patch("pyfsviz.stats.AsegStats") as mock_aseg:
+            mock_aseg.return_value.run.side_effect = _write_real_table
+            mock_aseg.return_value._list_outputs.return_value = {"out_table": str(aseg_file)}
+            result = _get_aseg_stats(["sub-001"], "aseg.csv", output_dir=str(temp_output_dir))
+
+        mock_aseg.assert_called_once()
+        df = pd.read_csv(result)
+        assert "Left-Lateral-Ventricle" in df.columns
+        assert df.loc[0, "Left-Lateral-Ventricle"] == pytest.approx(5000.0)
+
+    def test_get_aseg_stats_skips_when_no_subject_stats(
+        self,
+        temp_output_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Do not call asegstats2table when no subject has aseg.stats."""
+        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
+        with patch("pyfsviz.stats.AsegStats") as mock_aseg:
+            result = _get_aseg_stats(["sub-001"], "aseg.csv", output_dir=str(temp_output_dir))
+
+        mock_aseg.assert_not_called()
+        assert result == temp_output_dir / "aseg.csv"
+        assert not result.exists()
+
+    def test_get_aseg_stats_does_not_invent_table_when_command_writes_nothing(
+        self,
+        temp_output_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """If asegstats2table writes nothing, do not replace it with an ID-only stub."""
+        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
+        _touch_fs_stats(temp_output_dir, "sub-001", "aseg.stats")
+        with patch("pyfsviz.stats.AsegStats") as mock_aseg:
+            mock_aseg.return_value.run.return_value = {}
+            mock_aseg.return_value._list_outputs.return_value = {"out_table": "aseg.csv"}
+            result = _get_aseg_stats(["sub-001"], "aseg.csv", output_dir=str(temp_output_dir))
+
+        mock_aseg.assert_called_once()
+        assert result == temp_output_dir / "aseg.csv"
+        assert not result.exists()
+
     def test_rewrite_stats_id_column(self, temp_output_dir: Path) -> None:
         """Test that Measure:volume is rewritten to ID."""
         stats_file = temp_output_dir / "lh_area_aparc.csv"
@@ -524,3 +678,116 @@ class TestSynthSegTIV:
 
         assert df.columns[0] == "ID"
         assert list(df["ID"]) == ["sub-001", "sub-002"]
+
+    def test_rewrite_stats_id_column_preserves_tab_separated_regions(self, temp_output_dir: Path) -> None:
+        """Tab-delimited FreeSurfer tables keep region columns after the ID rewrite."""
+        stats_file = temp_output_dir / "lh_area_aparc.csv"
+        stats_file.write_text("lh.aparc.area\tlh_bankssts_area\n/data/sub-001\t245.0\n", encoding="utf-8")
+
+        _rewrite_stats_id_column(stats_file)
+        df = pd.read_csv(stats_file)
+
+        assert list(df.columns) == ["ID", "lh_bankssts_area"]
+        assert list(df["ID"]) == ["sub-001"]
+        assert df.loc[0, "lh_bankssts_area"] == pytest.approx(245.0)
+
+    def test_rewrite_stats_id_column_skips_missing_file(self, temp_output_dir: Path) -> None:
+        """Do not invent an ID-only aparc table when the real file is missing."""
+        stats_file = temp_output_dir / "lh_area_aparc.csv"
+        _rewrite_stats_id_column(stats_file)
+        assert not stats_file.exists()
+
+    def test_get_aparc_stats_skips_when_no_subject_stats(
+        self,
+        temp_output_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Do not call aparcstats2table when no subject has lh/rh.aparc.stats."""
+        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
+        with patch("pyfsviz.stats.AparcStats") as mock_aparc:
+            results = _get_aparc_stats(["sub-001"], "aparc.csv", output_dir=str(temp_output_dir))
+
+        mock_aparc.assert_not_called()
+        assert results == []
+
+    def test_get_aparc_stats_filters_to_subjects_with_stats(
+        self,
+        temp_output_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Only subjects with aparc.stats are passed to aparcstats2table."""
+        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
+        _touch_fs_stats(temp_output_dir, "sub-001", "lh.aparc.stats")
+        with patch("pyfsviz.stats.AparcStats") as mock_aparc:
+            mock_aparc.return_value.run.return_value = {}
+            mock_aparc.return_value._list_outputs.return_value = {"out_table": "missing.csv"}
+            _get_aparc_stats(
+                ["sub-001", "sub-002"],
+                "aparc.csv",
+                output_dir=str(temp_output_dir),
+                hemis=["lh"],
+                measures=["area"],
+            )
+
+        mock_aparc.assert_called_once()
+        assert mock_aparc.call_args.kwargs["subjects"] == ["sub-001"]
+
+    def test_get_aparc_stats_continues_when_command_fails(
+        self,
+        temp_output_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A FreeSurfer IndexError from an empty aparc table does not abort the report."""
+        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
+        _touch_fs_stats(temp_output_dir, "sub-001", "lh.aparc.stats")
+        with patch("pyfsviz.stats.AparcStats") as mock_aparc:
+            mock_aparc.return_value.run.side_effect = RuntimeError("IndexError: list index out of range")
+            results = _get_aparc_stats(
+                ["sub-001"],
+                "aparc.csv",
+                output_dir=str(temp_output_dir),
+                hemis=["lh"],
+                measures=["area"],
+            )
+
+        mock_aparc.assert_called_once()
+        assert results == []
+
+    def test_get_aparc_stats_does_not_invent_tables_when_command_writes_nothing(
+        self,
+        temp_output_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """If aparcstats2table writes nothing, do not replace it with ID-only stubs."""
+        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
+        for hemi in ("lh", "rh"):
+            _touch_fs_stats(temp_output_dir, "sub-001", f"{hemi}.aparc.stats")
+        with patch("pyfsviz.stats.AparcStats") as mock_aparc:
+            mock_aparc.return_value.run.return_value = {}
+            mock_aparc.return_value._list_outputs.return_value = {"out_table": "lh_area_aparc.csv"}
+            results = _get_aparc_stats(["sub-001"], "aparc.csv", output_dir=str(temp_output_dir))
+
+        assert mock_aparc.call_count == 6
+        lh_area = temp_output_dir / "lh_area_aparc.csv"
+        assert not lh_area.exists()
+        assert results == []
+
+    def test_get_aparc_stats_reuses_existing_tables(self, temp_output_dir: Path) -> None:
+        """Skip aparcstats2table when group reports have already written aparc CSVs."""
+        for measure in ("area", "volume", "thickness"):
+            for hemi in ("lh", "rh"):
+                pd.DataFrame(
+                    {
+                        f"{hemi}.aparc.{measure}": ["sub-001"],
+                        f"{hemi}_bankssts_{measure}": [1.0],
+                    },
+                ).to_csv(temp_output_dir / f"{hemi}_{measure}_aparc.csv", index=False)
+
+        with patch("pyfsviz.stats.AparcStats") as mock_aparc:
+            results = _get_aparc_stats(["sub-001"], "aparc.csv", output_dir=str(temp_output_dir))
+
+        mock_aparc.assert_not_called()
+        df = pd.read_csv(temp_output_dir / "lh_area_aparc.csv")
+        assert list(df.columns[:2]) == ["ID", "lh_bankssts_area"]
+        assert (temp_output_dir / "combined_aparc.csv").is_file()
+        assert any(path.name == "lh_area_aparc.csv" for path in results)
