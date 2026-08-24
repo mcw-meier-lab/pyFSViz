@@ -10,6 +10,7 @@ import pytest
 from pyfsviz.stats import (
     _add_synthseg_tiv_to_aseg,
     _combine_aparc_tables,
+    _comparison_metric_label,
     _get_aparc_stats,
     _get_aseg_stats,
     _read_synthseg_tiv,
@@ -33,7 +34,13 @@ def mock_stats_files(temp_output_dir: Path) -> list[Path]:
         "subject_id": ["sub-001", "sub-002", "sub-003", "sub-004", "sub-005"],
         "Left-Lateral-Ventricle": [5000.0, 5200.0, 4800.0, 5100.0, 4900.0],
         "Right-Lateral-Ventricle": [4900.0, 5100.0, 4700.0, 5000.0, 4800.0],
-        "Left-Cerebral-White-Matter": [450000.0, 460000.0, 440000.0, 455000.0, 445000.0],
+        "Left-Cerebral-White-Matter": [
+            450000.0,
+            460000.0,
+            440000.0,
+            455000.0,
+            445000.0,
+        ],
     }
     aseg_df = pd.DataFrame(aseg_data)
     aseg_file = temp_output_dir / "aseg_stats.csv"
@@ -53,7 +60,15 @@ def mock_stats_files_with_outliers(temp_output_dir: Path) -> list[Path]:
     # Normal values: [5000, 5010, 4990, 5005, 4995] - very tight distribution
     # Outliers: 10000 and 0 - extremely extreme values that will be outliers even with inflated std
     aseg_data = {
-        "subject_id": ["sub-001", "sub-002", "sub-003", "sub-004", "sub-005", "sub-006", "sub-007"],
+        "subject_id": [
+            "sub-001",
+            "sub-002",
+            "sub-003",
+            "sub-004",
+            "sub-005",
+            "sub-006",
+            "sub-007",
+        ],
         "Left-Lateral-Ventricle": [
             5000.0,
             5010.0,
@@ -63,8 +78,24 @@ def mock_stats_files_with_outliers(temp_output_dir: Path) -> list[Path]:
             10000.0,
             0.0,
         ],  # 10000 and 0 are extreme outliers
-        "Right-Lateral-Ventricle": [4900.0, 5100.0, 4700.0, 5000.0, 4800.0, 4900.0, 5100.0],
-        "Left-Cerebral-White-Matter": [450000.0, 460000.0, 440000.0, 455000.0, 445000.0, 450000.0, 460000.0],
+        "Right-Lateral-Ventricle": [
+            4900.0,
+            5100.0,
+            4700.0,
+            5000.0,
+            4800.0,
+            4900.0,
+            5100.0,
+        ],
+        "Left-Cerebral-White-Matter": [
+            450000.0,
+            460000.0,
+            440000.0,
+            455000.0,
+            445000.0,
+            450000.0,
+            460000.0,
+        ],
     }
     aseg_df = pd.DataFrame(aseg_data)
     aseg_file = temp_output_dir / "aseg_stats_outliers.csv"
@@ -108,7 +139,10 @@ class TestCheckMetrics:
                         assert "lower_bound" in result
                         assert result["outlier_count"] == 0
 
-    def test_check_metrics_with_outliers(self, mock_stats_files_with_outliers: list[Path]) -> None:
+    def test_check_metrics_with_outliers(
+        self,
+        mock_stats_files_with_outliers: list[Path],
+    ) -> None:
         """Test check_metrics with data that has outliers."""
         # Note: Outliers inflate the std calculation, so we use a lower threshold (1.5 SD)
         # to ensure outliers are detected. In practice, robust methods might be preferred.
@@ -129,7 +163,10 @@ class TestCheckMetrics:
         # Should find at least some outliers
         assert found_outliers
 
-    def test_check_metrics_different_threshold(self, mock_stats_files_with_outliers: list[Path]) -> None:
+    def test_check_metrics_different_threshold(
+        self,
+        mock_stats_files_with_outliers: list[Path],
+    ) -> None:
         """Test check_metrics with different SD threshold."""
         # With lower threshold, should find more outliers
         results_low = check_metrics(mock_stats_files_with_outliers, sd_threshold=2.0)
@@ -176,7 +213,10 @@ class TestCheckMetrics:
         results = check_metrics([nan_file], sd_threshold=3.0)
         assert isinstance(results, dict)
 
-    def test_check_metrics_outlier_subjects_structure(self, mock_stats_files_with_outliers: list[Path]) -> None:
+    def test_check_metrics_outlier_subjects_structure(
+        self,
+        mock_stats_files_with_outliers: list[Path],
+    ) -> None:
         """Test that outlier_subjects have correct structure."""
         results = check_metrics(mock_stats_files_with_outliers, sd_threshold=3.0)
 
@@ -234,7 +274,10 @@ class TestGenMetricPlots:
         # Should generate plots for regions
         assert len(plots) > 0
 
-    def test_gen_metric_plots_plot_structure(self, mock_stats_files: list[Path]) -> None:
+    def test_gen_metric_plots_plot_structure(
+        self,
+        mock_stats_files: list[Path],
+    ) -> None:
         """Test that generated plots have correct structure."""
         plots = gen_metric_plots(mock_stats_files)
 
@@ -245,28 +288,34 @@ class TestGenMetricPlots:
             # Check that plot has layout
             assert plot.layout is not None
 
-    def test_gen_metric_plots_skip_hemisphere_files(self, temp_output_dir: Path) -> None:
-        """Test that gen_metric_plots skips hemisphere-specific files."""
-        # Create files that should be skipped (lh_ or rh_ in filename)
+    def test_gen_metric_plots_includes_hemisphere_files(
+        self,
+        temp_output_dir: Path,
+    ) -> None:
+        """Hemisphere aparc tables are plotted, not skipped."""
         lh_file = temp_output_dir / "lh_area_aparc.csv"
         rh_file = temp_output_dir / "rh_area_aparc.csv"
-
-        lh_data = {"subject_id": ["sub-001"], "region1": [100.0]}
-        rh_data = {"subject_id": ["sub-001"], "region1": [95.0]}
-
-        pd.DataFrame(lh_data).to_csv(lh_file, index=False)
-        pd.DataFrame(rh_data).to_csv(rh_file, index=False)
-
-        # Create a file that should be processed
         aseg_file = temp_output_dir / "aseg.csv"
-        aseg_data = {"subject_id": ["sub-001"], "region1": [100.0]}
-        pd.DataFrame(aseg_data).to_csv(aseg_file, index=False)
 
+        pd.DataFrame({"subject_id": ["sub-001"], "region1": [100.0]}).to_csv(
+            lh_file,
+            index=False,
+        )
+        pd.DataFrame({"subject_id": ["sub-001"], "region1": [95.0]}).to_csv(
+            rh_file,
+            index=False,
+        )
+        pd.DataFrame({"subject_id": ["sub-001"], "region1": [80.0]}).to_csv(
+            aseg_file,
+            index=False,
+        )
+
+        aseg_only = gen_metric_plots([aseg_file])
         plots = gen_metric_plots([lh_file, rh_file, aseg_file])
-        # Should only process aseg.csv, not the hemisphere files
-        assert isinstance(plots, list)
-        # Should have at least one plot from aseg.csv
-        assert len(plots) >= 1
+
+        assert len(plots) > len(aseg_only)
+        metrics = {fig.layout.meta["metric"] for fig in plots}
+        assert metrics == {"lh_area_aparc", "rh_area_aparc", "aseg"}
 
     def test_gen_metric_plots_skip_combined_files(self, temp_output_dir: Path) -> None:
         """Test that gen_metric_plots skips combined files."""
@@ -290,9 +339,15 @@ class TestGenMetricPlots:
 class TestSummarizeOutlierSubjects:
     """Test summarize_outlier_subjects function."""
 
-    def test_summarize_outlier_subjects(self, mock_stats_files_with_outliers: list[Path]) -> None:
+    def test_summarize_outlier_subjects(
+        self,
+        mock_stats_files_with_outliers: list[Path],
+    ) -> None:
         """Test outlier subjects are aggregated by subject ID."""
-        quality_summary = check_metrics(mock_stats_files_with_outliers, sd_threshold=1.5)
+        quality_summary = check_metrics(
+            mock_stats_files_with_outliers,
+            sd_threshold=1.5,
+        )
         summary = summarize_outlier_subjects(quality_summary)
 
         assert isinstance(summary, list)
@@ -302,7 +357,10 @@ class TestSummarizeOutlierSubjects:
         assert summary[0]["outlier_count"] > 0
         assert isinstance(summary[0]["findings"], list)
 
-    def test_summarize_outlier_subjects_none(self, mock_stats_files: list[Path]) -> None:
+    def test_summarize_outlier_subjects_none(
+        self,
+        mock_stats_files: list[Path],
+    ) -> None:
         """Test empty summary when no outliers are present."""
         quality_summary = check_metrics(mock_stats_files, sd_threshold=3.0)
         summary = summarize_outlier_subjects(quality_summary)
@@ -331,15 +389,18 @@ class TestCompareGroupMetrics:
             "control": ["sub-001", "sub-002"],
             "patient": ["sub-003", "sub-004"],
         }
-        comparison = compare_group_metrics([group_stats_file], groups, alpha=0.05)
+        comparison = compare_group_metrics([group_stats_file], groups)
 
         assert "aseg" in comparison
         assert "Left-Lateral-Ventricle" in comparison["aseg"]
         assert comparison["aseg"]["Left-Lateral-Ventricle"]["control"]["n"] == 2
         assert comparison["aseg"]["Left-Lateral-Ventricle"]["patient"]["n"] == 2
-        assert "comparison" in comparison["aseg"]["Left-Lateral-Ventricle"]
+        assert "comparison" not in comparison["aseg"]["Left-Lateral-Ventricle"]
 
-    def test_compare_group_metrics_requires_two_groups(self, group_stats_file: Path) -> None:
+    def test_compare_group_metrics_requires_two_groups(
+        self,
+        group_stats_file: Path,
+    ) -> None:
         """Test that one group raises ValueError."""
         with pytest.raises(ValueError, match="At least two groups"):
             compare_group_metrics([group_stats_file], {"only": ["sub-001"]})
@@ -355,9 +416,31 @@ class TestCompareGroupMetrics:
         assert isinstance(plots, list)
         assert len(plots) > 0
         assert isinstance(plots[0], go.Figure)
+        assert plots[0].layout.meta["metric"] == "aseg"
+        assert plots[0].layout.meta["label"] == "Aseg"
+        html = plots[0].to_html(full_html=False, include_plotlyjs=False)
+        assert "bdata" not in html
+        assert "control" in html
+        assert "sub-001" in html
+        assert "5000" in html
+
+    def test_comparison_metric_label_by_filename(self) -> None:
+        """Each stats table gets its own tab label, including extra measures."""
+        assert _comparison_metric_label("aseg") == "Aseg"
+        assert _comparison_metric_label("lh_area_aparc") == "LH Area"
+        assert _comparison_metric_label("rh_area_aparc") == "RH Area"
+        assert _comparison_metric_label("lh_volume_aparc") == "LH Volume"
+        assert _comparison_metric_label("rh_thickness_aparc") == "RH Thickness"
+        assert _comparison_metric_label("lh_meancurv_aparc") == "LH Meancurv"
 
 
-def _write_synthseg_csv(path: Path, *, subject: str, tiv: float, include_subject_column: bool = True) -> None:
+def _write_synthseg_csv(
+    path: Path,
+    *,
+    subject: str,
+    tiv: float,
+    include_subject_column: bool = True,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if include_subject_column:
         pd.DataFrame(
@@ -401,7 +484,10 @@ def _write_aparc_table(
 class TestCombineAparcTables:
     """Test merging aparcstats2table outputs into combined_aparc.csv."""
 
-    def test_combine_aparc_tables_keeps_hemi_region_and_measure(self, temp_output_dir: Path) -> None:
+    def test_combine_aparc_tables_keeps_hemi_region_and_measure(
+        self,
+        temp_output_dir: Path,
+    ) -> None:
         """Combined columns must encode hemisphere, region, and measure."""
         subjects = ["/data/sub-001", "sub-002"]
         lh_area = temp_output_dir / "lh_area_aparc.csv"
@@ -435,7 +521,10 @@ class TestCombineAparcTables:
             hemi="rh",
             measure="volume",
             subjects=subjects,
-            regions={"bankssts": [1200.0, 1250.0], "superiorfrontal": [21000.0, 21500.0]},
+            regions={
+                "bankssts": [1200.0, 1250.0],
+                "superiorfrontal": [21000.0, 21500.0],
+            },
         )
 
         combined = _combine_aparc_tables([lh_area, rh_area, lh_thickness, rh_volume])
@@ -460,12 +549,20 @@ class TestCombineAparcTables:
         assert combined.loc[combined["ID"] == "sub-001", "lh_bankssts_thickness"].iloc[0] == pytest.approx(2.4)
         assert combined.loc[combined["ID"] == "sub-002", "rh_bankssts_volume"].iloc[0] == pytest.approx(1250.0)
 
-    def test_combine_aparc_tables_skips_missing_files(self, temp_output_dir: Path) -> None:
+    def test_combine_aparc_tables_skips_missing_files(
+        self,
+        temp_output_dir: Path,
+    ) -> None:
         """Missing aparc tables are ignored when building the combined file."""
         lh_area = temp_output_dir / "lh_area_aparc.csv"
-        pd.DataFrame({"ID": ["sub-001"], "lh_bankssts_area": [245.0]}).to_csv(lh_area, index=False)
+        pd.DataFrame({"ID": ["sub-001"], "lh_bankssts_area": [245.0]}).to_csv(
+            lh_area,
+            index=False,
+        )
 
-        combined = _combine_aparc_tables([lh_area, temp_output_dir / "rh_area_aparc.csv"])
+        combined = _combine_aparc_tables(
+            [lh_area, temp_output_dir / "rh_area_aparc.csv"],
+        )
 
         assert list(combined["ID"]) == ["sub-001"]
         assert combined.loc[0, "lh_bankssts_area"] == pytest.approx(245.0)
@@ -487,9 +584,14 @@ class TestSynthSegTIV:
             tiv=1500123.4,
         )
 
-        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(1500123.4)
+        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(
+            1500123.4,
+        )
 
-    def test_read_synthseg_tiv_without_subject_column(self, temp_output_dir: Path) -> None:
+    def test_read_synthseg_tiv_without_subject_column(
+        self,
+        temp_output_dir: Path,
+    ) -> None:
         """Test reading TIV when the CSV has only volume columns."""
         _write_synthseg_csv(
             temp_output_dir / "sub-001" / "stats" / "synthseg.vol.csv",
@@ -498,7 +600,9 @@ class TestSynthSegTIV:
             include_subject_column=False,
         )
 
-        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(1234567.0)
+        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(
+            1234567.0,
+        )
 
     def test_read_synthseg_tiv_missing_file(self, temp_output_dir: Path) -> None:
         """Test that a missing SynthSeg CSV returns None."""
@@ -521,7 +625,11 @@ class TestSynthSegTIV:
             },
         ).to_csv(aseg_file, index=False)
 
-        result = _add_synthseg_tiv_to_aseg(aseg_file, ["sub-001", "sub-002", "sub-003"], temp_output_dir)
+        result = _add_synthseg_tiv_to_aseg(
+            aseg_file,
+            ["sub-001", "sub-002", "sub-003"],
+            temp_output_dir,
+        )
         df = pd.read_csv(result)
 
         assert list(df.columns[:2]) == ["ID", "total intracranial"]
@@ -551,9 +659,14 @@ class TestSynthSegTIV:
         """Read SynthSeg TIV from a tab-delimited volume file."""
         path = temp_output_dir / "sub-001" / "stats" / "synthseg.vol.csv"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("subject\ttotal intracranial\nsub-001\t1500123.4\n", encoding="utf-8")
+        path.write_text(
+            "subject\ttotal intracranial\nsub-001\t1500123.4\n",
+            encoding="utf-8",
+        )
 
-        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(1500123.4)
+        assert _read_synthseg_tiv("sub-001", temp_output_dir) == pytest.approx(
+            1500123.4,
+        )
 
     def test_add_synthseg_tiv_skips_missing_aseg(self, temp_output_dir: Path) -> None:
         """Do not invent an ID-only aseg table when the real file is missing."""
@@ -565,9 +678,15 @@ class TestSynthSegTIV:
         assert result == aseg_file
         assert not aseg_file.exists()
 
-    def test_stats_table_path_does_not_nest_output_dir(self, temp_output_dir: Path) -> None:
+    def test_stats_table_path_does_not_nest_output_dir(
+        self,
+        temp_output_dir: Path,
+    ) -> None:
         """Nipype table paths must not be joined onto output_dir a second time."""
-        nested = _stats_table_path(temp_output_dir / "reports", temp_output_dir / "reports" / "aseg.csv")
+        nested = _stats_table_path(
+            temp_output_dir / "reports",
+            temp_output_dir / "reports" / "aseg.csv",
+        )
         relative = _stats_table_path("reports", Path("reports") / "aseg.csv")
 
         assert nested == temp_output_dir / "reports" / "aseg.csv"
@@ -594,7 +713,11 @@ class TestSynthSegTIV:
         ).to_csv(aseg_file, index=False)
 
         with patch("pyfsviz.stats.AsegStats") as mock_aseg:
-            result = _get_aseg_stats(["sub-001"], "aseg.csv", output_dir=str(temp_output_dir))
+            result = _get_aseg_stats(
+                ["sub-001"],
+                "aseg.csv",
+                output_dir=str(temp_output_dir),
+            )
 
         mock_aseg.assert_not_called()
         df = pd.read_csv(result)
@@ -624,8 +747,14 @@ class TestSynthSegTIV:
 
         with patch("pyfsviz.stats.AsegStats") as mock_aseg:
             mock_aseg.return_value.run.side_effect = _write_real_table
-            mock_aseg.return_value._list_outputs.return_value = {"out_table": str(aseg_file)}
-            result = _get_aseg_stats(["sub-001"], "aseg.csv", output_dir=str(temp_output_dir))
+            mock_aseg.return_value._list_outputs.return_value = {
+                "out_table": str(aseg_file),
+            }
+            result = _get_aseg_stats(
+                ["sub-001"],
+                "aseg.csv",
+                output_dir=str(temp_output_dir),
+            )
 
         mock_aseg.assert_called_once()
         df = pd.read_csv(result)
@@ -640,7 +769,11 @@ class TestSynthSegTIV:
         """Do not call asegstats2table when no subject has aseg.stats."""
         monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
         with patch("pyfsviz.stats.AsegStats") as mock_aseg:
-            result = _get_aseg_stats(["sub-001"], "aseg.csv", output_dir=str(temp_output_dir))
+            result = _get_aseg_stats(
+                ["sub-001"],
+                "aseg.csv",
+                output_dir=str(temp_output_dir),
+            )
 
         mock_aseg.assert_not_called()
         assert result == temp_output_dir / "aseg.csv"
@@ -656,8 +789,14 @@ class TestSynthSegTIV:
         _touch_fs_stats(temp_output_dir, "sub-001", "aseg.stats")
         with patch("pyfsviz.stats.AsegStats") as mock_aseg:
             mock_aseg.return_value.run.return_value = {}
-            mock_aseg.return_value._list_outputs.return_value = {"out_table": "aseg.csv"}
-            result = _get_aseg_stats(["sub-001"], "aseg.csv", output_dir=str(temp_output_dir))
+            mock_aseg.return_value._list_outputs.return_value = {
+                "out_table": "aseg.csv",
+            }
+            result = _get_aseg_stats(
+                ["sub-001"],
+                "aseg.csv",
+                output_dir=str(temp_output_dir),
+            )
 
         mock_aseg.assert_called_once()
         assert result == temp_output_dir / "aseg.csv"
@@ -679,10 +818,16 @@ class TestSynthSegTIV:
         assert df.columns[0] == "ID"
         assert list(df["ID"]) == ["sub-001", "sub-002"]
 
-    def test_rewrite_stats_id_column_preserves_tab_separated_regions(self, temp_output_dir: Path) -> None:
+    def test_rewrite_stats_id_column_preserves_tab_separated_regions(
+        self,
+        temp_output_dir: Path,
+    ) -> None:
         """Tab-delimited FreeSurfer tables keep region columns after the ID rewrite."""
         stats_file = temp_output_dir / "lh_area_aparc.csv"
-        stats_file.write_text("lh.aparc.area\tlh_bankssts_area\n/data/sub-001\t245.0\n", encoding="utf-8")
+        stats_file.write_text(
+            "lh.aparc.area\tlh_bankssts_area\n/data/sub-001\t245.0\n",
+            encoding="utf-8",
+        )
 
         _rewrite_stats_id_column(stats_file)
         df = pd.read_csv(stats_file)
@@ -691,7 +836,10 @@ class TestSynthSegTIV:
         assert list(df["ID"]) == ["sub-001"]
         assert df.loc[0, "lh_bankssts_area"] == pytest.approx(245.0)
 
-    def test_rewrite_stats_id_column_skips_missing_file(self, temp_output_dir: Path) -> None:
+    def test_rewrite_stats_id_column_skips_missing_file(
+        self,
+        temp_output_dir: Path,
+    ) -> None:
         """Do not invent an ID-only aparc table when the real file is missing."""
         stats_file = temp_output_dir / "lh_area_aparc.csv"
         _rewrite_stats_id_column(stats_file)
@@ -705,7 +853,11 @@ class TestSynthSegTIV:
         """Do not call aparcstats2table when no subject has lh/rh.aparc.stats."""
         monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
         with patch("pyfsviz.stats.AparcStats") as mock_aparc:
-            results = _get_aparc_stats(["sub-001"], "aparc.csv", output_dir=str(temp_output_dir))
+            results = _get_aparc_stats(
+                ["sub-001"],
+                "aparc.csv",
+                output_dir=str(temp_output_dir),
+            )
 
         mock_aparc.assert_not_called()
         assert results == []
@@ -720,7 +872,9 @@ class TestSynthSegTIV:
         _touch_fs_stats(temp_output_dir, "sub-001", "lh.aparc.stats")
         with patch("pyfsviz.stats.AparcStats") as mock_aparc:
             mock_aparc.return_value.run.return_value = {}
-            mock_aparc.return_value._list_outputs.return_value = {"out_table": "missing.csv"}
+            mock_aparc.return_value._list_outputs.return_value = {
+                "out_table": "missing.csv",
+            }
             _get_aparc_stats(
                 ["sub-001", "sub-002"],
                 "aparc.csv",
@@ -741,7 +895,9 @@ class TestSynthSegTIV:
         monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
         _touch_fs_stats(temp_output_dir, "sub-001", "lh.aparc.stats")
         with patch("pyfsviz.stats.AparcStats") as mock_aparc:
-            mock_aparc.return_value.run.side_effect = RuntimeError("IndexError: list index out of range")
+            mock_aparc.return_value.run.side_effect = RuntimeError(
+                "IndexError: list index out of range",
+            )
             results = _get_aparc_stats(
                 ["sub-001"],
                 "aparc.csv",
@@ -764,15 +920,24 @@ class TestSynthSegTIV:
             _touch_fs_stats(temp_output_dir, "sub-001", f"{hemi}.aparc.stats")
         with patch("pyfsviz.stats.AparcStats") as mock_aparc:
             mock_aparc.return_value.run.return_value = {}
-            mock_aparc.return_value._list_outputs.return_value = {"out_table": "lh_area_aparc.csv"}
-            results = _get_aparc_stats(["sub-001"], "aparc.csv", output_dir=str(temp_output_dir))
+            mock_aparc.return_value._list_outputs.return_value = {
+                "out_table": "lh_area_aparc.csv",
+            }
+            results = _get_aparc_stats(
+                ["sub-001"],
+                "aparc.csv",
+                output_dir=str(temp_output_dir),
+            )
 
         assert mock_aparc.call_count == 6
         lh_area = temp_output_dir / "lh_area_aparc.csv"
         assert not lh_area.exists()
         assert results == []
 
-    def test_get_aparc_stats_reuses_existing_tables(self, temp_output_dir: Path) -> None:
+    def test_get_aparc_stats_reuses_existing_tables(
+        self,
+        temp_output_dir: Path,
+    ) -> None:
         """Skip aparcstats2table when group reports have already written aparc CSVs."""
         for measure in ("area", "volume", "thickness"):
             for hemi in ("lh", "rh"):
@@ -784,7 +949,11 @@ class TestSynthSegTIV:
                 ).to_csv(temp_output_dir / f"{hemi}_{measure}_aparc.csv", index=False)
 
         with patch("pyfsviz.stats.AparcStats") as mock_aparc:
-            results = _get_aparc_stats(["sub-001"], "aparc.csv", output_dir=str(temp_output_dir))
+            results = _get_aparc_stats(
+                ["sub-001"],
+                "aparc.csv",
+                output_dir=str(temp_output_dir),
+            )
 
         mock_aparc.assert_not_called()
         df = pd.read_csv(temp_output_dir / "lh_area_aparc.csv")

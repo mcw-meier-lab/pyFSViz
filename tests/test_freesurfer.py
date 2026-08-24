@@ -64,7 +64,9 @@ def test_gen_tlrc_data(freesurfer: FreeSurfer, temp_output_dir: str) -> None:
     assert (Path(temp_output_dir) / "mni2orig.nii.gz").exists()
 
 
-@pytest.mark.skip(reason="Requires FSL, nipype, and nireports to be installed and configured")
+@pytest.mark.skip(
+    reason="Requires FSL, nipype, and nireports to be installed and configured",
+)
 def test_gen_tlrc_report(freesurfer: FreeSurfer, temp_output_dir: str) -> None:
     """Test Talairach report generation."""
     freesurfer.gen_tlrc_report("sub-001", temp_output_dir)
@@ -81,7 +83,9 @@ def test_gen_aparcaseg_plots(freesurfer: FreeSurfer, temp_output_dir: str) -> No
     assert aparcaseg.name == "aparcaseg.png"
 
 
-@pytest.mark.skip(reason="Surface plotting requires complex FreeSurfer file formats - needs improvement")
+@pytest.mark.skip(
+    reason="Surface plotting requires complex FreeSurfer file formats - needs improvement",
+)
 def test_gen_surf_plots(freesurfer: FreeSurfer, temp_output_dir: str) -> None:
     """Test surface plot generation."""
     plots = freesurfer.gen_surf_plots("sub-001", temp_output_dir)
@@ -166,7 +170,11 @@ def test_gen_html_report(freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
 class TestFreeSurferInitialization:
     """Test FreeSurfer class initialization and error handling."""
 
-    def test_init_with_valid_paths(self, mock_freesurfer_home: Path, mock_subjects_dir: Path) -> None:
+    def test_init_with_valid_paths(
+        self,
+        mock_freesurfer_home: Path,
+        mock_subjects_dir: Path,
+    ) -> None:
         """Test initialization with valid paths."""
         fs = FreeSurfer(
             freesurfer_home=str(mock_freesurfer_home),
@@ -180,16 +188,26 @@ class TestFreeSurferInitialization:
         with tempfile.TemporaryDirectory() as tmpdir:
             invalid_path = Path(tmpdir) / "nonexistent"
             with pytest.raises(FileNotFoundError, match="FREESURFER_HOME not found"):
-                FreeSurfer(freesurfer_home=str(invalid_path), subjects_dir=str(mock_subjects_dir))
+                FreeSurfer(
+                    freesurfer_home=str(invalid_path),
+                    subjects_dir=str(mock_subjects_dir),
+                )
 
     def test_init_with_invalid_subjects_dir(self, mock_freesurfer_home: Path) -> None:
         """Test initialization raises error when SUBJECTS_DIR doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             invalid_path = Path(tmpdir) / "nonexistent"
             with pytest.raises(FileNotFoundError, match="SUBJECTS_DIR not found"):
-                FreeSurfer(freesurfer_home=str(mock_freesurfer_home), subjects_dir=str(invalid_path))
+                FreeSurfer(
+                    freesurfer_home=str(mock_freesurfer_home),
+                    subjects_dir=str(invalid_path),
+                )
 
-    def test_init_with_env_vars(self, mock_freesurfer_home: Path, mock_subjects_dir: Path) -> None:
+    def test_init_with_env_vars(
+        self,
+        mock_freesurfer_home: Path,
+        mock_subjects_dir: Path,
+    ) -> None:
         """Test initialization uses environment variables when paths not provided."""
         original_freesurfer = os.environ.get("FREESURFER_HOME")
         original_subjects = os.environ.get("SUBJECTS_DIR")
@@ -245,7 +263,10 @@ class TestCheckReconAll:
         with pytest.raises(IndexError):
             freesurfer.check_recon_all("test-subject-empty")
 
-    def test_check_recon_all_without_finished_message(self, freesurfer: FreeSurfer) -> None:
+    def test_check_recon_all_without_finished_message(
+        self,
+        freesurfer: FreeSurfer,
+    ) -> None:
         """Test check_recon_all when log doesn't have 'finished without error'."""
         # Create a subject directory structure
         subject_dir = freesurfer.subjects_dir / "test-subject-no-finish"
@@ -282,7 +303,11 @@ class TestGenAparcasegPlots:
 class TestGenHtmlReportEdgeCases:
     """Test gen_html_report edge cases and error handling."""
 
-    def test_gen_html_report_empty_img_list(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_html_report_empty_img_list(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_html_report with empty image list."""
         html_file = freesurfer.gen_html_report(
             subject="sub-001",
@@ -291,7 +316,11 @@ class TestGenHtmlReportEdgeCases:
         )
         assert html_file.exists()
 
-    def test_gen_html_report_none_img_list(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_html_report_none_img_list(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_html_report with None img_list (should use default)."""
         # This might fail if subject doesn't exist, but that's expected
         # We'll just check that the method handles None gracefully
@@ -306,7 +335,11 @@ class TestGenHtmlReportEdgeCases:
             # Expected if subject directory structure doesn't exist
             pass
 
-    def test_gen_html_report_metrics_csv_parse_error(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_html_report_metrics_csv_parse_error(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_html_report handles malformed CSV gracefully."""
         # Create mock image files
         mock_img_dir = temp_output_dir / "mock_imgs"
@@ -330,7 +363,11 @@ class TestGenHtmlReportEdgeCases:
         )
         assert html_file.exists()
 
-    def test_gen_html_report_metrics_csv_empty_file(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_html_report_metrics_csv_empty_file(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_html_report handles empty CSV file."""
         # Create mock image files
         mock_img_dir = temp_output_dir / "mock_imgs"
@@ -351,7 +388,11 @@ class TestGenHtmlReportEdgeCases:
         )
         assert html_file.exists()
 
-    def test_gen_html_report_metrics_csv_no_subject_column(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_html_report_metrics_csv_no_subject_column(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_html_report with CSV that has no subject column."""
         # Create mock image files
         mock_img_dir = temp_output_dir / "mock_imgs"
@@ -382,7 +423,11 @@ class TestGenHtmlReportEdgeCases:
         # Metrics should be included even without subject column
         assert "WM SNR (Original)" in html_content or html_content  # May or may not be present
 
-    def test_gen_html_report_metrics_csv_empty_dataframe(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_html_report_metrics_csv_empty_dataframe(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_html_report with CSV that has headers but no data rows."""
         # Create mock image files
         mock_img_dir = temp_output_dir / "mock_imgs"
@@ -424,7 +469,7 @@ class TestGenGroupReport:
         assert "groups" in sig.parameters
         assert "template" in sig.parameters
         assert "sd_threshold" in sig.parameters
-        assert "alpha" in sig.parameters
+        assert "alpha" not in sig.parameters
 
     def test_gen_group_report_signature(self, freesurfer: FreeSurfer) -> None:
         """Test that gen_group_report has correct signature."""
@@ -457,7 +502,9 @@ class TestGenGroupReport:
         except (FileNotFoundError, RuntimeError, OSError, ValueError) as e:
             # If get_stats fails (because FreeSurfer commands aren't available),
             # that's expected - we're just testing directory creation logic
-            logger.debug(f"gen_group_report failed (expected if FreeSurfer unavailable): {e}")
+            logger.debug(
+                f"gen_group_report failed (expected if FreeSurfer unavailable): {e}",
+            )
             # Directory should still be created even if get_stats fails
             assert non_existent_dir.exists()
 
@@ -504,17 +551,36 @@ class TestGenGroupReport:
             assert "Outlier Plots" in html_content
             assert "Number of subjects" in html_content
 
-    def test_gen_group_report_default_subjects(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_group_report_default_subjects(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_group_report uses get_subjects() when subjects=None."""
         # This will fail if FreeSurfer commands aren't available, but that's OK
         try:
-            html_file = freesurfer.gen_group_report(output_dir=temp_output_dir, subjects=None)
+            html_file = freesurfer.gen_group_report(
+                output_dir=temp_output_dir,
+                subjects=None,
+            )
             assert html_file.exists()
-        except (FileNotFoundError, RuntimeError, OSError, ValueError, AttributeError) as e:
+        except (
+            FileNotFoundError,
+            RuntimeError,
+            OSError,
+            ValueError,
+            AttributeError,
+        ) as e:
             # Expected if FreeSurfer commands aren't available or get_subjects fails
-            logger.debug(f"gen_group_report with default subjects failed (expected if FreeSurfer unavailable): {e}")
+            logger.debug(
+                f"gen_group_report with default subjects failed (expected if FreeSurfer unavailable): {e}",
+            )
 
-    def test_gen_group_report_custom_threshold(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_group_report_custom_threshold(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_group_report with custom SD threshold."""
         # Create mock stats files
         stats_dir = temp_output_dir
@@ -545,7 +611,11 @@ class TestGenGroupReport:
                 html_content = f.read()
             assert "2.5" in html_content
 
-    def test_gen_group_report_custom_template(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_group_report_custom_template(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_group_report with custom template."""
         # Create mock stats files
         stats_dir = temp_output_dir
@@ -582,7 +652,11 @@ class TestGenGroupReport:
             assert "Custom Group Report" in html_content
             assert "Subjects: 2" in html_content
 
-    def test_gen_group_report_html_structure(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_group_report_html_structure(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test that generated group report has correct HTML structure."""
         # Create mock stats files
         stats_dir = temp_output_dir
@@ -617,7 +691,11 @@ class TestGenGroupReport:
             assert "Outlier Plots" in html_content
             assert "plotly" in html_content.lower() or "plotly" in html_content
 
-    def test_gen_group_report_with_empty_subjects(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_group_report_with_empty_subjects(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test gen_group_report with empty subjects list."""
         # This should fail gracefully or use get_subjects()
         try:
@@ -630,15 +708,42 @@ class TestGenGroupReport:
                 with open(html_file, encoding="utf-8") as f:
                     html_content = f.read()
                 assert "FreeSurfer: Group Report" in html_content
-        except (FileNotFoundError, RuntimeError, OSError, ValueError, IndexError, KeyError) as e:
+        except (
+            FileNotFoundError,
+            RuntimeError,
+            OSError,
+            ValueError,
+            IndexError,
+            KeyError,
+        ) as e:
             # Expected if get_stats fails with empty subjects or FreeSurfer commands aren't available
             logger.debug(f"gen_group_report with empty subjects failed (expected): {e}")
 
-    def test_gen_group_report_outlier_summary(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_group_report_outlier_summary(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test that outlier subjects appear in the summary section."""
         aseg_data = {
-            "subject_id": ["sub-001", "sub-002", "sub-003", "sub-004", "sub-005", "sub-006", "sub-007"],
-            "Left-Lateral-Ventricle": [5000.0, 5010.0, 4990.0, 5005.0, 4995.0, 10000.0, 0.0],
+            "subject_id": [
+                "sub-001",
+                "sub-002",
+                "sub-003",
+                "sub-004",
+                "sub-005",
+                "sub-006",
+                "sub-007",
+            ],
+            "Left-Lateral-Ventricle": [
+                5000.0,
+                5010.0,
+                4990.0,
+                5005.0,
+                4995.0,
+                10000.0,
+                0.0,
+            ],
         }
         aseg_file = temp_output_dir / "aseg.csv"
         pd.DataFrame(aseg_data).to_csv(aseg_file, index=False)
@@ -648,7 +753,15 @@ class TestGenGroupReport:
 
             html_file = freesurfer.gen_group_report(
                 output_dir=temp_output_dir,
-                subjects=["sub-001", "sub-002", "sub-003", "sub-004", "sub-005", "sub-006", "sub-007"],
+                subjects=[
+                    "sub-001",
+                    "sub-002",
+                    "sub-003",
+                    "sub-004",
+                    "sub-005",
+                    "sub-006",
+                    "sub-007",
+                ],
                 sd_threshold=1.5,
             )
 
@@ -658,7 +771,11 @@ class TestGenGroupReport:
             assert "Suspicious / Outlier Subjects" in html_content
             assert "sub-006" in html_content or "sub-007" in html_content
 
-    def test_gen_group_report_with_groups(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_group_report_with_groups(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test group report with between-group comparison."""
         aseg_data = {
             "subject_id": ["sub-001", "sub-002", "sub-003", "sub-004"],
@@ -686,7 +803,96 @@ class TestGenGroupReport:
             assert "Group Comparison" in html_content
             assert "control" in html_content
             assert "patient" in html_content
-            assert "Group Comparison Plots" in html_content
+            assert "p-value" not in html_content.lower()
+            assert "welch" not in html_content.lower()
+            assert "nav-tabs" in html_content
+            assert "Aseg" in html_content
+            assert 'id="cmp-aseg"' in html_content
+            assert 'id="quality-aseg"' in html_content
+            assert 'id="plots-aseg"' in html_content
+            assert "cdn.plot.ly" in html_content
+            assert "5000" in html_content
+            assert "bdata" not in html_content
+
+    def test_gen_group_report_comparison_tabs_per_stats_table(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test comparison plots get one tab per generated stats table."""
+        subjects = ["sub-001", "sub-002", "sub-003", "sub-004"]
+        aseg_file = temp_output_dir / "aseg.csv"
+        pd.DataFrame(
+            {
+                "subject_id": subjects,
+                "Left-Lateral-Ventricle": [5000.0, 5100.0, 7000.0, 7100.0],
+            },
+        ).to_csv(aseg_file, index=False)
+        lh_area = temp_output_dir / "lh_area_aparc.csv"
+        pd.DataFrame(
+            {
+                "ID": subjects,
+                "lh_bankssts_area": [200.0, 210.0, 300.0, 310.0],
+            },
+        ).to_csv(lh_area, index=False)
+        rh_area = temp_output_dir / "rh_area_aparc.csv"
+        pd.DataFrame(
+            {
+                "ID": subjects,
+                "rh_bankssts_area": [190.0, 205.0, 290.0, 305.0],
+            },
+        ).to_csv(rh_area, index=False)
+        lh_thickness = temp_output_dir / "lh_thickness_aparc.csv"
+        pd.DataFrame(
+            {
+                "ID": subjects,
+                "lh_bankssts_thickness": [2.4, 2.5, 2.1, 2.0],
+            },
+        ).to_csv(lh_thickness, index=False)
+        lh_meancurv = temp_output_dir / "lh_meancurv_aparc.csv"
+        pd.DataFrame(
+            {
+                "ID": subjects,
+                "lh_bankssts_meancurv": [0.12, 0.13, 0.11, 0.10],
+            },
+        ).to_csv(lh_meancurv, index=False)
+
+        groups = {
+            "control": ["sub-001", "sub-002"],
+            "patient": ["sub-003", "sub-004"],
+        }
+
+        with patch("pyfsviz.freesurfer.get_stats") as mock_get_stats:
+            mock_get_stats.return_value = {
+                "aseg": aseg_file,
+                "aparc": [lh_area, rh_area, lh_thickness, lh_meancurv],
+            }
+
+            html_file = freesurfer.gen_group_report(
+                output_dir=temp_output_dir,
+                groups=groups,
+            )
+
+            with open(html_file, encoding="utf-8") as f:
+                html_content = f.read()
+
+            assert "nav-tabs" in html_content
+            assert "Aseg" in html_content
+            assert "LH Area" in html_content
+            assert "RH Area" in html_content
+            assert "LH Thickness" in html_content
+            assert "LH Meancurv" in html_content
+            assert 'id="cmp-aseg"' in html_content
+            assert "cmp-lh-area-aparc" in html_content
+            assert "lh_bankssts_area" in html_content
+            assert "Left-Lateral-Ventricle" in html_content
+            assert 'id="qualityTabs"' in html_content
+            assert 'id="plotTabs"' in html_content
+            assert 'id="quality-aseg"' in html_content
+            assert 'id="plots-aseg"' in html_content
+            assert "shown.bs.tab" in html_content
+            assert 'data-toggle="tab"' in html_content
+            assert ".metric-tabs" in html_content
 
     def test_resolve_groups_from_directories(self, freesurfer: FreeSurfer) -> None:
         """Test resolving group membership from FreeSurfer subject directories."""
@@ -696,15 +902,25 @@ class TestGenGroupReport:
             if group_dir.exists():
                 shutil.rmtree(group_dir)
             group_dir.mkdir()
-        shutil.copytree(freesurfer.subjects_dir / "sub-001", control_dir / "sub-control-001")
-        shutil.copytree(freesurfer.subjects_dir / "sub-001", patient_dir / "sub-patient-001")
+        shutil.copytree(
+            freesurfer.subjects_dir / "sub-001",
+            control_dir / "sub-control-001",
+        )
+        shutil.copytree(
+            freesurfer.subjects_dir / "sub-001",
+            patient_dir / "sub-patient-001",
+        )
 
         resolved = freesurfer.resolve_groups(["cohort_control", "cohort_patient"])
 
         assert resolved["cohort_control"] == ["sub-control-001"]
         assert resolved["cohort_patient"] == ["sub-patient-001"]
 
-    def test_gen_group_report_inferred_groups(self, freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
+    def test_gen_group_report_inferred_groups(
+        self,
+        freesurfer: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
         """Test group report when group subjects are inferred from directories."""
         control_dir = freesurfer.subjects_dir / "report_control"
         patient_dir = freesurfer.subjects_dir / "report_patient"
@@ -712,8 +928,14 @@ class TestGenGroupReport:
             if group_dir.exists():
                 shutil.rmtree(group_dir)
             group_dir.mkdir()
-        shutil.copytree(freesurfer.subjects_dir / "sub-001", control_dir / "sub-control-001")
-        shutil.copytree(freesurfer.subjects_dir / "sub-001", patient_dir / "sub-patient-001")
+        shutil.copytree(
+            freesurfer.subjects_dir / "sub-001",
+            control_dir / "sub-control-001",
+        )
+        shutil.copytree(
+            freesurfer.subjects_dir / "sub-001",
+            patient_dir / "sub-patient-001",
+        )
 
         aseg_data = {
             "subject_id": ["sub-control-001", "sub-patient-001"],
