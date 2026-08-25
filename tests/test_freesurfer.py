@@ -429,8 +429,7 @@ def test_subject_summary_flags_failed_talairach_and_large_rotation(tmp_path: Pat
     """Talairach log errors and large rotations should be flagged."""
     subject_dir = _write_subject_tree(tmp_path)
     (subject_dir / "scripts" / "recon-all.log").write_text(
-        "ERROR: talairach_avi failed the transform sanity check\n"
-        "recon-all -s sub-001 exited with ERRORS at now\n",
+        "ERROR: talairach_avi failed the transform sanity check\nrecon-all -s sub-001 exited with ERRORS at now\n",
         encoding="utf-8",
     )
     (subject_dir / "mri" / "transforms" / "talairach.lta").write_text("lta\n", encoding="utf-8")

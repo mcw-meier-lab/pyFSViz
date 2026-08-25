@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import datetime
 import importlib
+import importlib.util
 import inspect
 import logging
 import math
 import os
 import re
 import shutil
+import sys
 import textwrap
 import warnings
 from collections.abc import Mapping
@@ -46,16 +48,47 @@ from pyfsviz.stats import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-# fsqc 2.1.x uses non-raw regexes (`\.`, `\S`, `\W`) in fsqcUtils. Python 3.12+
-# emits SyntaxWarning at import. createScreenshots then calls
-# logging.captureWarnings(True), which logs that as WARNING:py.warnings.
-warnings.filterwarnings(
-    "ignore",
-    message=r"invalid escape sequence",
-    category=SyntaxWarning,
-    module=r".*fsqcUtils",
-)
-importlib.import_module("fsqc.fsqcUtils")
+# fsqc 2.1.x uses non-raw regexes (`\.`, `\S`, `\W`) in fsqcUtils.
+_FSQC_UTILS = "fsqc.fsqcUtils"
+_FSQC_LTA_REGEX = r"-*[0-9]\.\S+\W+-*[0-9]\.\S+\W+-*[0-9]\.\S+\W+-*[0-9]\.\S+\W+"
+
+
+def _import_fsqc_utils() -> None:
+    """Import ``fsqc.fsqcUtils``, rewriting invalid regex escapes for Python 3.14.
+
+    Those literals are a DeprecationWarning on 3.10-3.11, a SyntaxWarning on
+    3.12-3.13, and a SyntaxError under warnings-as-errors on 3.14 (the default
+    message no longer starts with ``invalid escape sequence``). createScreenshots
+    also calls ``logging.captureWarnings(True)``, which would log them as
+    ``WARNING:py.warnings``.
+    """
+    if _FSQC_UTILS in sys.modules:
+        return
+    spec = importlib.util.find_spec(_FSQC_UTILS)
+    if spec is None or spec.loader is None or spec.origin is None:
+        raise ImportError(_FSQC_UTILS)
+    get_source = getattr(spec.loader, "get_source", None)
+    source = get_source(_FSQC_UTILS) if get_source is not None else None
+    if source is None:
+        importlib.import_module(_FSQC_UTILS)
+        return
+    patched = re.sub(
+        r'(?<![rR])"' + re.escape(_FSQC_LTA_REGEX) + '"',
+        lambda _: f'r"{_FSQC_LTA_REGEX}"',
+        source,
+    )
+    if patched == source:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=r".*invalid escape sequence")
+            importlib.import_module(_FSQC_UTILS)
+        return
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[_FSQC_UTILS] = module
+    exec(compile(patched, spec.origin, "exec"), module.__dict__)  # noqa: S102
+    sys.modules["fsqc"].fsqcUtils = module  # type: ignore[attr-defined]
+
+
+_import_fsqc_utils()
 
 _GroupSpec = list[str] | str | Path | None
 _GroupDefinition = Mapping[str, _GroupSpec] | list[str]
@@ -99,6 +132,8 @@ _FSQC_SURFACE_HANG_FIX = """\
                         sortIdx = np.delete(sortIdx, findIdx[0, 0])"""
 
 
+# FreeSurfer `# Measure` lines: name, key, description, value, unit
+_ASEG_MEASURE_VALUE_INDEX = 3
 _TALAIRACH_ROT_WARN_RAD = 0.5
 _TALAIRACH_ERROR_MARKERS = (
     "failed the transform",
@@ -119,11 +154,7 @@ def _report_image_files(directory: Path) -> list[Path]:
     ``Path.glob`` does not expand brace patterns such as ``*.{png,svg}``.
     """
     suffixes = {".png", ".svg"}
-    return sorted(
-        path
-        for path in directory.rglob("*")
-        if path.is_file() and path.suffix.lower() in suffixes
-    )
+    return sorted(path for path in directory.rglob("*") if path.is_file() and path.suffix.lower() in suffixes)
 
 
 def _read_text(path: Path) -> str | None:
@@ -263,10 +294,10 @@ def _aseg_measures(stats_file: Path) -> dict[str, float]:
         if not line.startswith("# Measure"):
             continue
         parts = [part.strip() for part in line[len("# Measure") :].split(",")]
-        if len(parts) < 4:
+        if len(parts) <= _ASEG_MEASURE_VALUE_INDEX:
             continue
         try:
-            value = float(parts[3])
+            value = float(parts[_ASEG_MEASURE_VALUE_INDEX])
         except ValueError:
             continue
         measures[parts[0]] = value
@@ -546,10 +577,7 @@ def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColorma
 
 
 def _decode_annot_name(name: object) -> str:
-    if isinstance(name, bytes):
-        text = name.decode("utf-8", errors="replace")
-    else:
-        text = str(name)
+    text = name.decode("utf-8", errors="replace") if isinstance(name, bytes) else str(name)
     return text.strip("\x00").strip()
 
 
@@ -589,7 +617,7 @@ def _aparc_surf_cmap(annot_path: Path) -> tuple[colors.ListedColormap, int] | No
     if ctab.size == 0:
         return None
     rgb = np.clip(ctab[:, :3].astype(float) / 255.0, 0, 1)
-    return colors.ListedColormap(rgb), int(len(rgb))
+    return colors.ListedColormap(rgb), len(rgb)
 
 
 def _aparc_regions(annot_path: Path) -> list[dict[str, str]]:
