@@ -89,6 +89,22 @@ When group directories differ from `SUBJECTS_DIR`, pyFSViz temporarily sets
 Group comparison is visual only: each plot shows the value distribution by
 group, with one point per subject. There are no t-tests or p-values.
 
+Example plots below are from
+[OpenNeuro ds004731](https://doi.org/10.18112/openneuro.ds004731.v1.0.0).
+See [`generate_reports.py`](../assets/examples/generate_reports.py) for the
+script that produced the HTML (group membership from `participants.tsv`
+sex).
+
+### Outlier / distribution plots
+
+![Plotly distribution plot with outliers](../assets/examples/group-outliers-plot.png){ width="720" }
+
+### Between-group comparison
+
+When `groups=` is set, each metric gets a box + strip plot by group:
+
+![Between-group comparison plot](../assets/examples/group-plot.png){ width="720" }
+
 ## Stats tables
 
 `gen_group_report` calls `get_stats()` to build:

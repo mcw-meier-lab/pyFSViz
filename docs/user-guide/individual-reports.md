@@ -69,8 +69,40 @@ Open `{output_dir}/{subject}/{subject}.html` in a browser. Images are
 referenced next to the HTML file, so keep that directory together if you copy
 reports.
 
+Example figures below are from
+[OpenNeuro ds004731](https://doi.org/10.18112/openneuro.ds004731.v1.0.0)
+(reconstructions run separately; pyFSViz only builds the HTML report).
+The script used to generate them is
+[`generate_reports.py`](../assets/examples/generate_reports.py).
+
+### Summary
+
+The **Summary** card is filled from the subject tree (`scripts/`,
+`stats/aseg.stats`, Talairach transforms) plus fsqc rotation when
+`metrics.csv` is present.
+
+![Individual report summary card](../assets/examples/individual-summary.png){ width="720" }
+
+### Metrics
+
+The **Metrics** table is the fsqc row from
+`{output_dir}/{subject}/metrics.csv` (written by `gen_aparcaseg_plots`).
+Older reports that only have `metrics.csv` at the reports root still work.
+
+![Individual report metrics table](../assets/examples/individual-metrics.png){ width="720" }
+
+### Talairach registration
+
+![Talairach registration overlay](../assets/examples/individual-tlrc.png){ width="800" }
+
+### Aparc+aseg
+
 The `aparc+aseg` mosaic is shown at page width. Click it to inspect slices at
 higher magnification: drag to pan, scroll to zoom, Esc or **Close** to return.
+
+![Aparc+aseg screenshot mosaic](../assets/examples/individual-aparcaseg.png){ width="800" }
+
+### Surfaces
 
 Surface views are colored with the subject's `aparc` annotation. A region
 legend sits in a sticky sidebar next to those plots so it stays visible
@@ -78,11 +110,7 @@ while you scroll. Regenerating surface images (`gen_images=True`) is needed
 if older PNGs were colored with the full FreeSurfer LUT instead of
 annotation colors.
 
-The **Summary** card is filled from the subject tree (`scripts/`,
-`stats/aseg.stats`, Talairach transforms) plus fsqc rotation when
-`metrics.csv` is present. The **Metrics** table is the fsqc row from
-`{output_dir}/{subject}/metrics.csv` (written by `gen_aparcaseg_plots`).
-Older reports that only have `metrics.csv` at the reports root still work.
+![Left hemisphere pial surface](../assets/examples/individual-lh_pial.png){ width="720" }
 
 To refresh HTML after a pyFSViz update without rerunning screenshots:
 

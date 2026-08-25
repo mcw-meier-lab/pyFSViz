@@ -44,7 +44,13 @@ Each subject is written to `reports/<subject>/<subject>.html`, with adjacent
 PNG/SVG images. The return value maps subject IDs to a `Path` on success or
 an `Exception` if that subject failed.
 
-See [Individual reports](individual-reports.md) for flags and output layout.
+![Example individual report summary](../assets/examples/individual-summary.png){ width="640" }
+
+*Example Summary card from [OpenNeuro ds004731](https://doi.org/10.18112/openneuro.ds004731.v1.0.0).
+Regenerate reports with [`generate_reports.py`](../assets/examples/generate_reports.py).*
+
+See [Individual reports](individual-reports.md) for flags, output layout, and
+more example figures.
 
 ## Group report
 
