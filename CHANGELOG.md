@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.6.1](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.1) - 2026-08-25
+
+<small>[Compare with 0.6.0](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.0...0.6.1)</small>
+
+### Bug Fixes
+
+- html generation fixes and updates ([63f12e4](https://github.com/mcw-meier-lab/pyFSViz/commit/63f12e48e78b8d8b1231fdabeac6a1dcd5d6014f) by Lezlie Espana).
+
 ## [0.6.0](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.0) - 2026-08-24
 
 <small>[Compare with 0.5.3](https://github.com/mcw-meier-lab/pyFSViz/compare/0.5.3...0.6.0)</small>
