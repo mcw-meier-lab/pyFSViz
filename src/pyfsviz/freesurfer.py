@@ -7,7 +7,6 @@ import inspect
 import logging
 import math
 import os
-import re
 import shutil
 from collections.abc import Mapping
 from contextlib import contextmanager
@@ -43,17 +42,6 @@ if TYPE_CHECKING:
 
 _GroupSpec = list[str] | str | Path | None
 _GroupDefinition = Mapping[str, _GroupSpec] | list[str]
-
-
-# FreeSurfer `# Measure` lines: name, key, description, value, unit
-_ASEG_MEASURE_VALUE_INDEX = 3
-_TALAIRACH_ROT_WARN_RAD = 0.5
-_TALAIRACH_ERROR_MARKERS = (
-    "failed the transform",
-    "talairach_avi failed",
-    "mpr2mni305 failed",
-    "error: talairach",
-)
 
 
 def _report_image_files(directory: Path) -> list[Path]:
@@ -127,24 +115,6 @@ def _subjects_dir_env(subjects_dir: Path) -> Iterator[None]:
             os.environ["SUBJECTS_DIR"] = original
 
 
-@contextmanager
-def _nilearn_threshold_copy_header() -> Iterator[None]:
-    """Opt nireports' ``threshold_img`` call into nilearn 0.13 ``copy_header=True``."""
-    original = nilearn_image.threshold_img
-    params = inspect.signature(original).parameters
-
-    def threshold_img(*args: Any, **kwargs: Any) -> Any:
-        if "copy_header" in params:
-            kwargs.setdefault("copy_header", True)
-        return original(*args, **kwargs)
-
-    nilearn_image.threshold_img = threshold_img
-    try:
-        yield
-    finally:
-        nilearn_image.threshold_img = original
-
-
 _APARC_LEGEND_SKIP = {
     "",
     "???",
@@ -207,24 +177,6 @@ def _decode_annot_name(name: object) -> str:
     return text.strip("\x00").strip()
 
 
-def _aparc_region_name(name: str) -> str:
-    label = name.strip()
-    lowered = label.lower()
-    for prefix in ("ctx-lh-", "ctx-rh-", "lh.", "rh."):
-        if lowered.startswith(prefix):
-            label = label[len(prefix) :]
-            break
-    return label.replace("_", " ")
-
-
-def _aparc_annot_path(subject_dir: Path) -> Path | None:
-    for filename in ("lh.aparc.annot", "rh.aparc.annot"):
-        path = subject_dir / "label" / filename
-        if path.is_file():
-            return path
-    return None
-
-
 def _read_aparc_ctab(annot_path: Path) -> tuple[np.ndarray, list[str]] | None:
     try:
         _labels, ctab, names = read_annot(str(annot_path))
@@ -244,26 +196,6 @@ def _aparc_surf_cmap(annot_path: Path) -> tuple[colors.ListedColormap, int] | No
         return None
     rgb = np.clip(ctab[:, :3].astype(float) / 255.0, 0, 1)
     return colors.ListedColormap(rgb), len(rgb)
-
-
-def _aparc_regions(annot_path: Path) -> list[dict[str, str]]:
-    """Return named aparc regions and hex colors from an annotation file."""
-    table = _read_aparc_ctab(annot_path)
-    if table is None:
-        return []
-    ctab, names = table
-    regions: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for row, raw_name in zip(ctab, names, strict=False):
-        label = _aparc_region_name(raw_name)
-        if not label or label.lower() in _APARC_LEGEND_SKIP or label.lower() in seen:
-            continue
-        red, green, blue = (int(row[0]), int(row[1]), int(row[2]))
-        if red == green == blue == 0:
-            continue
-        seen.add(label.lower())
-        regions.append({"name": label, "color": f"#{red:02x}{green:02x}{blue:02x}"})
-    return regions
 
 
 def _html_id(*parts: str) -> str:
@@ -765,8 +697,7 @@ class FreeSurfer:
             after_label="Template",
             out_report=f"{output_dir}/tlrc.svg",
         )
-        with _nilearn_threshold_copy_header():
-            result = report.run()
+        result = report.run()
         return result.outputs.out_report
 
     def gen_aparcaseg_plots(self, subject: str, output_dir: str) -> Path:
@@ -1001,9 +932,6 @@ class FreeSurfer:
             "%Y-%m-%d, %H:%M",
         )
 
-        annot_path = _aparc_annot_path(self.subjects_dir / subject)
-        surf_legend = _aparc_regions(annot_path) if annot_path is not None else []
-
         _config = {
             "timestamp": summary["generated_at"],
             "subject": subject,
@@ -1011,7 +939,6 @@ class FreeSurfer:
             "tlrc": tlrc,
             "aseg": aseg,
             "surf": surf,
-            "surf_legend": surf_legend,
             "metrics": metrics,
         }
 
