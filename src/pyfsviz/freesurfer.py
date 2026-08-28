@@ -3,27 +3,20 @@
 from __future__ import annotations
 
 import datetime
-import importlib
-import importlib.util
 import inspect
 import logging
 import math
 import os
 import re
 import shutil
-import sys
-import textwrap
-import warnings
 from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import fsqc
-import fsqc.createScreenshots
 import numpy as np
 import pandas as pd
-from fsqc import fsqcMain
 from importlib_resources import files
 from matplotlib import colors
 from matplotlib import pyplot as plt
@@ -48,88 +41,8 @@ from pyfsviz.stats import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-# fsqc 2.1.x uses non-raw regexes (`\.`, `\S`, `\W`) in fsqcUtils.
-_FSQC_UTILS = "fsqc.fsqcUtils"
-_FSQC_LTA_REGEX = r"-*[0-9]\.\S+\W+-*[0-9]\.\S+\W+-*[0-9]\.\S+\W+-*[0-9]\.\S+\W+"
-
-
-def _import_fsqc_utils() -> None:
-    """Import ``fsqc.fsqcUtils``, rewriting invalid regex escapes for Python 3.14.
-
-    Those literals are a DeprecationWarning on 3.10-3.11, a SyntaxWarning on
-    3.12-3.13, and a SyntaxError under warnings-as-errors on 3.14 (the default
-    message no longer starts with ``invalid escape sequence``). createScreenshots
-    also calls ``logging.captureWarnings(True)``, which would log them as
-    ``WARNING:py.warnings``.
-    """
-    if _FSQC_UTILS in sys.modules:
-        return
-    spec = importlib.util.find_spec(_FSQC_UTILS)
-    if spec is None or spec.loader is None or spec.origin is None:
-        raise ImportError(_FSQC_UTILS)
-    get_source = getattr(spec.loader, "get_source", None)
-    source = get_source(_FSQC_UTILS) if get_source is not None else None
-    if source is None:
-        importlib.import_module(_FSQC_UTILS)
-        return
-    patched = re.sub(
-        r'(?<![rR])"' + re.escape(_FSQC_LTA_REGEX) + '"',
-        lambda _: f'r"{_FSQC_LTA_REGEX}"',
-        source,
-    )
-    if patched == source:
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=r".*invalid escape sequence")
-            importlib.import_module(_FSQC_UTILS)
-        return
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[_FSQC_UTILS] = module
-    exec(compile(patched, spec.origin, "exec"), module.__dict__)  # noqa: S102
-    sys.modules["fsqc"].fsqcUtils = module  # type: ignore[attr-defined]
-
-
-_import_fsqc_utils()
-
 _GroupSpec = list[str] | str | Path | None
 _GroupDefinition = Mapping[str, _GroupSpec] | list[str]
-
-# Upstream fsqc warns on ambiguous surface contour segments but does not advance
-# sortIdx, which hangs createScreenshots. Resolve by taking the first match.
-_FSQC_SURFACE_HANG = """\
-                    elif findIdx.shape[0] > 1:
-                        warnings.warn(
-                            "WARNING: a problem occurred with the surface overlays",
-                            stacklevel = 2
-                        )"""
-_FSQC_SURFACE_HANG_FIX = """\
-                    elif findIdx.shape[0] > 1:
-                        warnings.warn(
-                            "WARNING: a problem occurred with the surface overlays",
-                            stacklevel = 2
-                        )
-                        if findIdx[0, 1] == 0:
-                            tmpxSort = np.append(
-                                tmpxSort,
-                                np.array(tmpx[sortIdx[findIdx[0, 0]], ::1], ndmin=2),
-                                axis=0,
-                            )
-                            tmpySort = np.append(
-                                tmpySort,
-                                np.array(tmpy[sortIdx[findIdx[0, 0]], ::1], ndmin=2),
-                                axis=0,
-                            )
-                        elif findIdx[0, 1] == 1:
-                            tmpxSort = np.append(
-                                tmpxSort,
-                                np.array(tmpx[sortIdx[findIdx[0, 0]], ::-1], ndmin=2),
-                                axis=0,
-                            )
-                            tmpySort = np.append(
-                                tmpySort,
-                                np.array(tmpy[sortIdx[findIdx[0, 0]], ::-1], ndmin=2),
-                                axis=0,
-                            )
-                        sortIdx = np.delete(sortIdx, findIdx[0, 0])"""
 
 
 # FreeSurfer `# Measure` lines: name, key, description, value, unit
@@ -141,11 +54,6 @@ _TALAIRACH_ERROR_MARKERS = (
     "mpr2mni305 failed",
     "error: talairach",
 )
-_EDIT_MARKERS = (
-    ("control points", Path("tmp") / "control.dat"),
-    ("control points", Path("mri") / "ctrl_pts.mgz"),
-    ("expert options", Path("scripts") / "expert-options"),
-)
 
 
 def _report_image_files(directory: Path) -> list[Path]:
@@ -155,91 +63,6 @@ def _report_image_files(directory: Path) -> list[Path]:
     """
     suffixes = {".png", ".svg"}
     return sorted(path for path in directory.rglob("*") if path.is_file() and path.suffix.lower() in suffixes)
-
-
-def _read_text(path: Path) -> str | None:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
-
-
-_RECON_COMMAND_SKIP = re.compile(
-    r"finished without error|exited with errors|finished with error|"
-    r"invocation of recon-all|recon-all-run-time-hours|#New#",
-    flags=re.IGNORECASE,
-)
-
-
-def _first_line(path: Path) -> str | None:
-    text = _read_text(path)
-    if not text:
-        return None
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped:
-            return stripped
-    return None
-
-
-def _pretty_recon_command(line: str) -> str:
-    parts = line.split()
-    if not parts:
-        return line
-    name = Path(parts[0]).name
-    if name.startswith("recon-all"):
-        return " ".join([name, *parts[1:]])
-    return line
-
-
-def _recon_command_from_log(text: str) -> str | None:
-    """Return the last user-facing recon-all invocation from recon-all.log.
-
-    recon-all writes ``$0 $inputargs`` immediately after ``setenv SUBJECTS_DIR``.
-    ``scripts/recon-all.cmd`` is a dump of internal binaries and is not the
-    command the user ran.
-    """
-    command: str | None = None
-    lines = text.splitlines()
-    for index, line in enumerate(lines):
-        if not line.strip().startswith("setenv SUBJECTS_DIR"):
-            continue
-        for following in lines[index + 1 : index + 6]:
-            stripped = following.strip()
-            if not stripped:
-                continue
-            if "recon-all" in stripped.lower() and not _RECON_COMMAND_SKIP.search(stripped):
-                command = _pretty_recon_command(stripped)
-            break
-    return command
-
-
-def _recon_command_from_env(text: str) -> str | None:
-    """Return last-invocation args from recon-all.env (``$inputargs``)."""
-    lines = text.splitlines()
-    for index, line in enumerate(lines):
-        if not line.strip().startswith("setenv SUBJECTS_DIR"):
-            continue
-        for following in lines[index + 1 : index + 6]:
-            stripped = following.strip()
-            if stripped:
-                if stripped.startswith("-"):
-                    return f"recon-all {stripped}"
-                if "recon-all" in stripped.lower():
-                    return _pretty_recon_command(stripped)
-                break
-    return None
-
-
-def _recon_command(subject_dir: Path, log_text: str | None) -> str | None:
-    if log_text:
-        command = _recon_command_from_log(log_text)
-        if command:
-            return command
-    env_text = _read_text(subject_dir / "scripts" / "recon-all.env")
-    if env_text:
-        return _recon_command_from_env(env_text)
-    return None
 
 
 def _pythonize(value: Any) -> Any:
@@ -285,178 +108,10 @@ def _load_metrics_csv(paths: list[Path], subject: str) -> dict[str, Any] | None:
     return None
 
 
-def _aseg_measures(stats_file: Path) -> dict[str, float]:
-    measures: dict[str, float] = {}
-    text = _read_text(stats_file)
-    if not text:
-        return measures
-    for line in text.splitlines():
-        if not line.startswith("# Measure"):
-            continue
-        parts = [part.strip() for part in line[len("# Measure") :].split(",")]
-        if len(parts) <= _ASEG_MEASURE_VALUE_INDEX:
-            continue
-        try:
-            value = float(parts[_ASEG_MEASURE_VALUE_INDEX])
-        except ValueError:
-            continue
-        measures[parts[0]] = value
-        if parts[1]:
-            measures[parts[1]] = value
-    return measures
-
-
-def _recon_status(log_text: str | None) -> tuple[str, str, str | None, float | None]:
-    """Return status, label, finished-at text, and runtime hours."""
-    if not log_text or not log_text.strip():
-        return "unknown", "Log missing or empty", None, None
-
-    runtime: float | None = None
-    runtime_match = re.search(r"recon-all-run-time-hours\s+([0-9.]+)", log_text)
-    if runtime_match:
-        runtime = float(runtime_match.group(1))
-
-    finished_at: str | None = None
-    finished_match = re.search(
-        r"finished without error at (.+)$",
-        log_text,
-        flags=re.MULTILINE,
-    )
-    if finished_match:
-        finished_at = finished_match.group(1).strip()
-
-    last_line = ""
-    for line in reversed(log_text.splitlines()):
-        if line.strip():
-            last_line = line.strip()
-            break
-
-    lowered_last = last_line.lower()
-    tail = log_text.lower()[-2000:]
-    if "exited with errors" in lowered_last or "finished with error" in lowered_last:
-        return "failed", "Finished with errors", finished_at, runtime
-    if "finished without error" in lowered_last:
-        return "passed", "Finished without error", finished_at, runtime
-    if "exited with errors" in tail or "finished with error" in tail:
-        return "failed", "Finished with errors", finished_at, runtime
-    if "finished without error" in tail:
-        return "passed", "Finished without error", finished_at, runtime
-    return "unknown", last_line or "Status not found", finished_at, runtime
-
-
-def _talairach_check(subject_dir: Path, log_text: str | None) -> str:
-    haystacks = [
-        _read_text(subject_dir / "mri" / "transforms" / "talairach_avi.log"),
-        log_text,
-    ]
-    combined = "\n".join(part for part in haystacks if part)
-    lower = combined.lower()
-    if any(marker in lower for marker in _TALAIRACH_ERROR_MARKERS):
-        return "failed"
-    if (subject_dir / "mri" / "transforms" / "talairach.lta").is_file() or (
-        subject_dir / "mri" / "transforms" / "talairach.xfm"
-    ).is_file():
-        return "passed"
-    return "unknown"
-
-
-def _talairach_rotation(metrics: dict[str, Any] | None) -> tuple[str | None, bool]:
-    if not metrics:
-        return None, False
-    axes = []
-    values: list[float] = []
-    for axis, key in (("x", "rot_tal_x"), ("y", "rot_tal_y"), ("z", "rot_tal_z")):
-        raw = metrics.get(key)
-        if raw is None:
-            continue
-        try:
-            radians = float(raw)
-        except (TypeError, ValueError):
-            continue
-        if math.isnan(radians):
-            continue
-        values.append(abs(radians))
-        axes.append(f"{axis}={math.degrees(radians):.1f}°")
-    if not axes:
-        return None, False
-    max_rad = max(values)
-    flagged = max_rad >= _TALAIRACH_ROT_WARN_RAD
-    label = ", ".join(axes) + f" (max {math.degrees(max_rad):.1f}°)"
-    return label, flagged
-
-
 def _format_runtime(hours: float) -> str:
     if hours < 1:
         return f"{hours * 60:.0f} min"
     return f"{hours:.1f} h"
-
-
-def _format_volume(value: float) -> str:
-    return f"{value:,.0f} mm³"
-
-
-def _subject_summary(
-    subjects_dir: Path,
-    subject: str,
-    *,
-    metrics: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Collect a compact individual-report summary from a subject tree."""
-    subject_dir = subjects_dir / subject
-    log_text = _read_text(subject_dir / "scripts" / "recon-all.log")
-    recon_status, recon_label, finished_at, runtime_hours = _recon_status(log_text)
-
-    fs_version = _first_line(subject_dir / "scripts" / "build-stamp.txt")
-    lastcall = _first_line(subject_dir / "scripts" / "lastcall.build-stamp.txt")
-    if lastcall and lastcall == fs_version:
-        lastcall = None
-
-    command = _recon_command(subject_dir, log_text)
-
-    measures = _aseg_measures(subject_dir / "stats" / "aseg.stats")
-    etiv = measures.get("eTIV", measures.get("EstimatedTotalIntraCranialVol"))
-    brainseg = measures.get("BrainSegVolNotVent", measures.get("BrainSegNotVent"))
-
-    edits: list[str] = []
-    for label, relative in _EDIT_MARKERS:
-        path = subject_dir / relative
-        if not path.is_file():
-            continue
-        if path.suffix.lower() in {".dat", ""} or path.name == "expert-options":
-            content = _read_text(path)
-            if content is not None and not content.strip():
-                continue
-        if label not in edits:
-            edits.append(label)
-
-    rotation_label, rotation_flagged = _talairach_rotation(metrics)
-    talairach_status = _talairach_check(subject_dir, log_text)
-    talairach_labels = {
-        "passed": "Passed",
-        "failed": "Failed",
-        "unknown": "Not found",
-    }
-
-    return {
-        "subject": subject,
-        "recon_status": recon_status,
-        "recon_status_label": recon_label,
-        "finished_at": finished_at,
-        "runtime_hours": runtime_hours,
-        "runtime_label": _format_runtime(runtime_hours) if runtime_hours is not None else None,
-        "fs_version": fs_version,
-        "fs_version_lastcall": lastcall,
-        "command": command,
-        "talairach_check": talairach_status,
-        "talairach_check_label": talairach_labels[talairach_status],
-        "talairach_rotation": rotation_label,
-        "talairach_rotation_flagged": rotation_flagged,
-        "etiv": etiv,
-        "etiv_label": _format_volume(etiv) if etiv is not None else None,
-        "brainsegvolnotvent": brainseg,
-        "brainseg_label": _format_volume(brainseg) if brainseg is not None else None,
-        "edits": edits,
-    }
 
 
 @contextmanager
@@ -470,35 +125,6 @@ def _subjects_dir_env(subjects_dir: Path) -> Iterator[None]:
             os.environ.pop("SUBJECTS_DIR", None)
         else:
             os.environ["SUBJECTS_DIR"] = original
-
-
-@contextmanager
-def _fsqc_screenshots_no_hang() -> Iterator[None]:
-    """Patch fsqc screenshot contour sorting so ambiguous segments cannot hang."""
-    original = fsqc.createScreenshots.createScreenshots
-    source = textwrap.dedent(inspect.getsource(original))
-    if _FSQC_SURFACE_HANG not in source:
-        logging.getLogger(__name__).warning(
-            "Could not patch fsqc surface-overlay hang; screenshots may stall "
-            "if contour sorting hits an ambiguous segment",
-        )
-        yield
-        return
-
-    namespace: dict[str, object] = {}
-    exec(  # noqa: S102
-        source.replace(_FSQC_SURFACE_HANG, _FSQC_SURFACE_HANG_FIX),
-        fsqc.createScreenshots.__dict__,
-        namespace,
-    )
-    patched = namespace["createScreenshots"]
-    fsqc.createScreenshots.createScreenshots = patched
-    fsqcMain.createScreenshots = patched
-    try:
-        yield
-    finally:
-        fsqc.createScreenshots.createScreenshots = original
-        fsqcMain.createScreenshots = original
 
 
 @contextmanager
@@ -954,9 +580,54 @@ class FreeSurfer:
 
         return stats_files
 
+    def _check_talairach(self, subject: str) -> dict[str, Any] | None:
+        """Check the recon-all log for Talairach Failure Detection."""
+        recon_file = self.subjects_dir / subject / "scripts" / "recon-all.log"
+
+        if not recon_file:
+            return {"afd": None, "qa": None, "z-score": None}
+
+        tlrc = {}
+        with open(recon_file, encoding="utf-8") as f:
+            lines = f.readlines()
+            for row in lines:
+                if "talairach_afd:" in row:
+                    tlrc["afd"] = " ".join(row.split()[4:])
+                if "TalAviQA" in row:
+                    tlrc["qa"] = row.split()[1]
+                if "z-score" in row:
+                    tlrc["z-score"] = row.split()[1]
+
+        return tlrc
+
+        
+    def _get_recon_info(self, subject: str) -> dict[str, Any] | None:
+        """Collect additional information from the FreeSurfer run, including
+        FreeSurfer version, runtime, and command used."""
+        done_file = self.subjects_dir / subject / "scripts" / "recon-all.done"
+
+        if not done_file:
+            return {"runtime": None, "version": None, "command":None}
+
+        info = {}
+        with open(done_file, encoding="utf-8") as f:
+            lines = f.readlines()
+            for row in lines:
+                if "RUNTIME_HOURS" in row:
+                    info["runtime"] = float(row.split()[-1])
+                elif "VERSION" in row:
+                    info["version"] = row.split()[1]
+                elif "CMDARGS" in row:
+                    info["command"] = "recon-all " + " ".join(row.split()[1:])
+
+        return info
+
     def check_recon_all(self, subject: str) -> bool:
         """Verify that the subject's FreeSurfer recon finished successfully."""
         recon_file = self.subjects_dir / subject / "scripts" / "recon-all.log"
+
+        if not recon_file:
+            return False
 
         with open(recon_file, encoding="utf-8") as f:
             line = f.readlines()[-1]
@@ -965,7 +636,6 @@ class FreeSurfer:
     def subject_summary(
         self,
         subject: str,
-        metrics: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Collect a compact individual-report summary from the subject tree.
 
@@ -973,15 +643,26 @@ class FreeSurfer:
         ----------
         subject : str
             Subject ID.
-        metrics : dict[str, Any] | None
-            Optional fsqc metrics row (used for Talairach rotation).
 
         Returns
         -------
         dict[str, Any]
             Fields for the individual HTML summary card.
         """
-        return _subject_summary(self.subjects_dir, subject, metrics=metrics)
+        recon_info = self._get_recon_info(subject)
+        tlrc_info = self._check_talairach(subject)
+
+        return {
+            "subject": subject,
+            "recon_status": self.check_recon_all(subject),
+            "runtime": _format_runtime(recon_info["runtime"]),
+            "fs_version": recon_info["version"],
+            "command": recon_info["command"],
+            "talairach_afd": tlrc_info["afd"],
+            "talairach_qa": tlrc_info["qa"],
+            "talairach_zscore": tlrc_info["z-score"],
+        }
+        
 
     def gen_tlrc_data(self, subject: str, output_dir: str) -> None:
         """Generate inverse talairach data for report generation.
@@ -1112,45 +793,44 @@ class FreeSurfer:
         ... )
         >>> images = fs_dir.gen_aparcaseg_plots("sub-001", "/opt/data/reports/sub-001")
         """
-        with _fsqc_screenshots_no_hang():
-            fsqc.run_fsqc(
-                subjects_dir=str(self.subjects_dir),
-                output_dir=output_dir,
-                subjects=[subject],
-                screenshots=True,
-                screenshots_overlay="aparc+aseg.mgz",
-                screenshots_views=[
-                    "x=-40",
-                    "x=-30",
-                    "x=-20",
-                    "x=-10",
-                    "x=0",
-                    "x=10",
-                    "x=20",
-                    "x=30",
-                    "x=40",
-                    "y=-40",
-                    "y=-30",
-                    "y=-20",
-                    "y=-10",
-                    "y=0",
-                    "y=10",
-                    "y=20",
-                    "y=30",
-                    "y=40",
-                    "z=-40",
-                    "z=-30",
-                    "z=-20",
-                    "z=-10",
-                    "z=0",
-                    "z=10",
-                    "z=20",
-                    "z=30",
-                    "z=40",
-                ],
-                screenshots_layout=["3", "9"],
-                no_group=True,
-            )
+        fsqc.run_fsqc(
+            subjects_dir=str(self.subjects_dir),
+            output_dir=output_dir,
+            subjects=[subject],
+            screenshots=True,
+            screenshots_overlay="aparc+aseg.mgz",
+            screenshots_views=[
+                "x=-40",
+                "x=-30",
+                "x=-20",
+                "x=-10",
+                "x=0",
+                "x=10",
+                "x=20",
+                "x=30",
+                "x=40",
+                "y=-40",
+                "y=-30",
+                "y=-20",
+                "y=-10",
+                "y=0",
+                "y=10",
+                "y=20",
+                "y=30",
+                "y=40",
+                "z=-40",
+                "z=-30",
+                "z=-20",
+                "z=-10",
+                "z=0",
+                "z=10",
+                "z=20",
+                "z=30",
+                "z=40",
+            ],
+            screenshots_layout=["3", "9"],
+            no_group=True,
+        )
 
         # Clean up/move files
         shutil.move(
