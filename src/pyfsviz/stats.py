@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -24,8 +23,7 @@ _MIN_GROUPS = 2
 _SYNTHSEG_VOL_CSV = Path("stats") / "synthseg.vol.csv"
 _SYNTHSEG_TIV_COLUMN = "total intracranial"
 _APARC_REPEAT_COLUMNS = ("BrainSegVolNotVent", "eTIV")
-_STATS_ID_COLUMN = "ID"
-_STATS_METADATA_COLUMNS = {_STATS_ID_COLUMN, _SYNTHSEG_TIV_COLUMN, "Measure:volume"}
+_STATS_METADATA_COLUMNS = {_SYNTHSEG_TIV_COLUMN, "Measure:volume"}
 _logger = logging.getLogger(__name__)
 
 
@@ -34,12 +32,6 @@ def _plotly_values(values: Any) -> list[Any]:
     if hasattr(values, "tolist"):
         return values.tolist()
     return list(values)
-
-
-def _normalize_subject_id(subject_id: str) -> str:
-    if "/" in subject_id:
-        return subject_id.rsplit("/", maxsplit=1)[-1]
-    return str(subject_id)
 
 
 def _synthseg_tiv_column(columns: pd.Index) -> str | None:
@@ -55,7 +47,7 @@ def _read_synthseg_tiv(
 ) -> float | None:
     """Return SynthSeg total intracranial volume for a subject, if available."""
     base = Path(subjects_dir) if subjects_dir is not None else _subjects_dir()
-    csv_path = base / _normalize_subject_id(subject) / _SYNTHSEG_VOL_CSV
+    csv_path = base / subject / _SYNTHSEG_VOL_CSV
     if not csv_path.is_file():
         return None
 
@@ -71,10 +63,10 @@ def _read_synthseg_tiv(
 
     id_col = df.columns[0]
     if str(id_col).strip().lower() != _SYNTHSEG_TIV_COLUMN:
-        subject_key = _normalize_subject_id(subject)
+        subject_key = subject
         matches = df[
             df[id_col].map(
-                lambda value: _normalize_subject_id(str(value)) == subject_key,
+                lambda value: str(value) == subject_key,
             )
         ]
         row = matches.iloc[0] if not matches.empty else df.iloc[0]
@@ -87,88 +79,20 @@ def _read_synthseg_tiv(
     return float(value)
 
 
-def _stats_table_path(output_dir: str | Path, tablefile: str | Path) -> Path:
-    """Return ``output_dir / <basename>`` so table paths are not nested."""
-    return Path(output_dir) / Path(tablefile).name
-
-
-def _absolute_path(path: str | Path) -> Path:
-    """Return an absolute path without resolving symlinks."""
-    path = Path(path).expanduser()
-    return path if path.is_absolute() else Path.cwd() / path
-
-
 def _read_stats_csv(table_file: Path) -> pd.DataFrame:
-    """Read a FreeSurfer stats table, accepting comma- or tab-separated files.
-
-    ``asegstats2table`` / ``aparcstats2table`` default to tabs. Reading those
-    with comma-separated ``read_csv`` collapses every region into one column;
-    rewriting ``ID`` then writes that collapsed table back out.
-    """
+    """Read a FreeSurfer stats table, accepting comma- or tab-separated files."""
     table_file = Path(table_file)
-    comma_df: pd.DataFrame | None = None
+    df = pd.DataFrame()
     for sep in (",", "\t"):
         try:
             df = pd.read_csv(table_file, sep=sep)
         except pd.errors.EmptyDataError:
             return pd.DataFrame()
-        if len(df.columns) > 1:
-            return df
-        if sep == ",":
-            comma_df = df
-    return comma_df if comma_df is not None else pd.DataFrame()
-
-
-def _stats_table_has_regions(table_file: Path) -> bool:
-    """Return True when a table exists and has at least one region column."""
-    if not table_file.is_file() or table_file.stat().st_size == 0:
-        return False
-    try:
-        df = _read_stats_csv(table_file)
-    except (OSError, pd.errors.ParserError, UnicodeDecodeError):
-        return False
-    regions = [col for col in df.columns if str(col).strip() not in _STATS_METADATA_COLUMNS]
-    return not df.empty and bool(regions)
+    return df
 
 
 def _subjects_dir() -> Path:
     return Path(os.environ.get("SUBJECTS_DIR", "."))
-
-
-def _subjects_with_stats(
-    subjects: list[str],
-    relative_stats_file: str | Path,
-) -> list[str]:
-    """Return subjects that have a non-empty stats file under ``SUBJECTS_DIR``."""
-    base = _subjects_dir()
-    relative_stats_file = Path(relative_stats_file)
-    usable: list[str] = []
-    for subject in subjects:
-        stats_file = base / _normalize_subject_id(subject) / relative_stats_file
-        if stats_file.is_file() and stats_file.stat().st_size > 0:
-            usable.append(subject)
-    return usable
-
-
-def _run_and_collect_table(interface: FSCommand, dest: Path) -> Path:
-    """Run a stats2table command and copy its output onto ``dest`` if needed."""
-    try:
-        interface.run()
-    except (RuntimeError, OSError) as exc:
-        _logger.warning("Stats command failed for %s: %s", dest.name, exc)
-        return dest
-    produced: Path | None = None
-    try:
-        produced = Path(str(interface._list_outputs()["out_table"]))
-    except (KeyError, TypeError, OSError):
-        produced = None
-    candidates = [path for path in (produced, Path.cwd() / dest.name) if path is not None]
-    for candidate in candidates:
-        if candidate.is_file() and candidate.stat().st_size > 0 and candidate.resolve() != dest.resolve():
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(candidate, dest)
-            break
-    return dest
 
 
 def _add_synthseg_tiv_to_aseg(
@@ -192,16 +116,15 @@ def _add_synthseg_tiv_to_aseg(
         return aseg_file
 
     id_col = df.columns[0]
-    tiv_by_subject = {_normalize_subject_id(subject): _read_synthseg_tiv(subject, subjects_dir) for subject in subjects}
+    tiv_by_subject = {subject: _read_synthseg_tiv(subject, subjects_dir) for subject in subjects}
     mapped = pd.to_numeric(
-        df[id_col].map(lambda sid: tiv_by_subject.get(_normalize_subject_id(str(sid)))),
+        df[id_col].map(lambda sid: tiv_by_subject.get(str(sid))),
         errors="coerce",
     )
 
     if mapped.isna().all():
         if column in df.columns:
             df = df.drop(columns=[column])
-        _set_stats_id_column(df).to_csv(aseg_file, index=False)
         _logger.warning(
             "No SynthSeg total intracranial values found for aseg table %s",
             aseg_file,
@@ -213,36 +136,8 @@ def _add_synthseg_tiv_to_aseg(
     else:
         df.insert(1, column, mapped)
 
-    df = _set_stats_id_column(df)
     df.to_csv(aseg_file, index=False)
     return aseg_file
-
-
-def _set_stats_id_column(df: pd.DataFrame) -> pd.DataFrame:
-    """Rename the first stats column to ``ID`` and normalize subject identifiers."""
-    if df.columns.empty:
-        return df
-    first = df.columns[0]
-    if first != _STATS_ID_COLUMN:
-        df = df.rename(columns={first: _STATS_ID_COLUMN})
-    df[_STATS_ID_COLUMN] = df[_STATS_ID_COLUMN].astype(str).map(_normalize_subject_id)
-    return df
-
-
-def _rewrite_stats_id_column(table_file: Path) -> Path:
-    """Rewrite a stats CSV so the first column is ``ID`` without collapsing regions."""
-    table_file = Path(table_file)
-    if not table_file.is_file():
-        _logger.warning(
-            "Stats table %s does not exist; skipping ID rewrite",
-            table_file,
-        )
-        return table_file
-    df = _read_stats_csv(table_file)
-    if df.empty or df.columns.empty:
-        return table_file
-    _set_stats_id_column(df).to_csv(table_file, index=False)
-    return table_file
 
 
 class AsegStatsInputSpec(FSTraitedSpec):
@@ -404,65 +299,18 @@ def _get_aseg_stats(
     Path
         Path to output tablefile.
     """
-    aseg_path = _absolute_path(_stats_table_path(output_dir, tablefile))
-    aseg_path.parent.mkdir(parents=True, exist_ok=True)
-    if not _stats_table_has_regions(aseg_path):
-        usable = _subjects_with_stats(subjects, Path("stats") / "aseg.stats")
-        if not usable:
-            _logger.warning(
-                "No aseg.stats files found under SUBJECTS_DIR; skipping %s",
-                aseg_path.name,
-            )
-            return _add_synthseg_tiv_to_aseg(aseg_path, subjects, _subjects_dir())
-        if aseg_path.exists():
-            aseg_path.unlink()
-        aseg_cmd = AsegStats(
-            subjects=usable,
-            meas=meas,
-            delim=delim,
-            skip=skip,
-            tablefile=str(aseg_path),
-            segs=segs,
-        )
-        _run_and_collect_table(aseg_cmd, aseg_path)
-    return _add_synthseg_tiv_to_aseg(aseg_path, subjects, _subjects_dir())
-
-
-def _combine_aparc_tables(table_files: list[Path]) -> pd.DataFrame:
-    """Merge per-hemisphere, per-measure aparc tables into one wide table.
-
-    ``aparcstats2table`` column names already encode hemisphere, region, and
-    measure (for example ``lh_bankssts_area``). Metadata columns that are
-    repeated in every table are kept once.
-    """
-    combined: pd.DataFrame | None = None
-    for table_file in table_files:
-        table_path = Path(table_file)
-        if not table_path.is_file():
-            continue
-        try:
-            df = _read_stats_csv(table_path)
-        except (pd.errors.ParserError, OSError, UnicodeDecodeError):
-            continue
-        if df.empty or df.columns.empty:
-            continue
-        df = _set_stats_id_column(df)
-        if combined is None:
-            combined = df
-            continue
-        overlap = [col for col in df.columns if col in combined.columns and col != _STATS_ID_COLUMN]
-        combined = combined.merge(
-            df.drop(columns=overlap),
-            on=_STATS_ID_COLUMN,
-            how="outer",
-        )
-
-    if combined is None:
-        return pd.DataFrame()
-
-    trailing = [col for col in _APARC_REPEAT_COLUMNS if col in combined.columns]
-    leading = [col for col in combined.columns if col not in trailing]
-    return combined[leading + trailing]
+    aseg_cmd = AsegStats(
+        subjects=subjects,
+        meas=meas,
+        delim=delim,
+        skip=skip,
+        tablefile=Path(output_dir, tablefile),
+        segs=segs,
+    )
+    aseg_cmd.run()
+    aseg_file = aseg_cmd._list_outputs()["out_table"]
+    aseg_path = Path(output_dir, aseg_file)
+    return _add_synthseg_tiv_to_aseg(aseg_path, subjects)
 
 
 def _get_aparc_stats(
@@ -508,45 +356,21 @@ def _get_aparc_stats(
         hemis = ["lh", "rh"]
 
     results = []
-    output_path = _absolute_path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
 
     for m in measures:
         for h in hemis:
-            aparc_path = _stats_table_path(output_path, f"{h}_{m}_{tablefile}")
-            if not _stats_table_has_regions(aparc_path):
-                usable = _subjects_with_stats(
-                    subjects,
-                    Path("stats") / f"{h}.{parc}.stats",
-                )
-                if not usable:
-                    _logger.warning(
-                        "No %s.%s.stats files found under SUBJECTS_DIR; skipping %s",
-                        h,
-                        parc,
-                        aparc_path.name,
-                    )
-                    continue
-                if aparc_path.exists():
-                    aparc_path.unlink()
-                aparc_cmd = AparcStats(
-                    subjects=usable,
-                    meas=m,
-                    hemi=h,
-                    delim=delim,
-                    skip=skip,
-                    tablefile=str(aparc_path),
-                    parc=parc,
-                )
-                _run_and_collect_table(aparc_cmd, aparc_path)
-            if aparc_path.is_file():
-                results.append(_rewrite_stats_id_column(aparc_path))
-
-    combined_path = output_path / f"combined_{tablefile}"
-    combined = _combine_aparc_tables(results)
-    if not combined.columns.empty:
-        combined.to_csv(combined_path, index=False)
-        results.append(combined_path)
+            aparc_cmd = AparcStats(
+                subjects=subjects,
+                meas=m,
+                hemi=h,
+                delim=delim,
+                skip=skip,
+                tablefile=Path(output_dir, f"{h}_{m}_{tablefile}"),
+                parc=parc,
+            )
+            aparc_cmd.run()
+            res = aparc_cmd._list_outputs()
+            results.append(Path(output_dir, res["out_table"]))
 
     return results
 
@@ -585,15 +409,13 @@ def _subject_group_map(groups: dict[str, list[str]]) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for group_name, group_subjects in groups.items():
         for subject in group_subjects:
-            mapping[_normalize_subject_id(subject)] = group_name
+            mapping[subject] = group_name
     return mapping
 
 
 def _load_metrics(stats_files: list[Path]) -> dict[str, pd.DataFrame]:
     metrics: dict[str, pd.DataFrame] = {}
     for file in stats_files:
-        if "combined" in file.stem or not file.is_file():
-            continue
         try:
             df = _read_stats_csv(file)
         except (pd.errors.ParserError, OSError, UnicodeDecodeError):
@@ -602,21 +424,6 @@ def _load_metrics(stats_files: list[Path]) -> dict[str, pd.DataFrame]:
             continue
         metrics[file.stem] = df
     return metrics
-
-
-def _region_columns(data: pd.DataFrame) -> list[str]:
-    return [
-        col
-        for col in data.columns[1:]
-        if col
-        not in [
-            "ID",
-            "Measure:volume",
-            "lh.aparc.a2009s_thickness",
-            "rh.aparc.a2009s_thickness",
-            "hemi",
-        ]
-    ]
 
 
 def _group_values(
@@ -629,7 +436,7 @@ def _group_values(
     grouped: dict[str, list[float]] = {group_name: [] for group_name in groups}
 
     for _, row in data.iterrows():
-        subject_id = _normalize_subject_id(str(row[id_col]))
+        subject_id = str(row[id_col])
         group_name = subject_groups.get(subject_id)
         if group_name is None:
             continue
@@ -662,7 +469,7 @@ def summarize_outlier_subjects(
             if result.get("status") != "outliers_detected":
                 continue
             for outlier in result.get("outlier_subjects", []):
-                subject_id = _normalize_subject_id(str(outlier["subject_id"]))
+                subject_id = str(outlier["subject_id"])
                 finding = f"{metric_name}/{region}: {float(outlier['value']):.2f}"
                 if finding not in subject_findings[subject_id]:
                     subject_findings[subject_id].append(finding)
@@ -709,7 +516,7 @@ def compare_group_metrics(
 
     for metric_name, data in metrics.items():
         comparison[metric_name] = {}
-        for region in _region_columns(data):
+        for region in data[1:]: #skip id column
             grouped_values = _group_values(data, region, groups)
             comparison[metric_name][region] = {
                 group_name: {
@@ -785,10 +592,10 @@ def gen_group_comparison_plots(
         subject_groups = _subject_group_map(groups)
         label = _comparison_metric_label(metric_name)
 
-        for region in _region_columns(data):
+        for region in data[1:]:
             plot_rows = []
             for _, row in data.iterrows():
-                subject_id = _normalize_subject_id(str(row[id_col]))
+                subject_id = str(row[id_col])
                 group_name = subject_groups.get(subject_id)
                 value = row[region]
                 if group_name is None or pd.isna(value):
@@ -858,13 +665,6 @@ def check_metrics(stats_files: list[Path], sd_threshold: float = 3.0) -> dict:
         region_cols = [
             col
             for col in data.columns[1:]
-            if col
-            not in [
-                "ID",
-                "Measure:volume",
-                "lh.aparc.a2009s_thickness",
-                "rh.aparc.a2009s_thickness",
-            ]
         ]
         id_col = data.columns[0]
 
@@ -960,7 +760,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
     for metric, data in metrics.items():
         idx_col = data.columns[0]
         if "hemi" in data.columns:
-            for c in _region_columns(data):
+            for c in data[1:]:
                 fig = go.Figure()
                 fig.add_trace(
                     go.Box(
@@ -996,7 +796,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                 plots.append(fig)
         elif any("Left-" in c for c in data.columns):
             region_groups: dict[str, dict[str, str]] = {}
-            for region in _region_columns(data):
+            for region in data[1:]:
                 # Extract base region name (remove hemisphere prefix if present)
                 if region.startswith("Left-"):
                     base_region = region[5:]  # Remove 'Left-' prefix
@@ -1102,7 +902,7 @@ def gen_metric_plots(stats_files: list[Path]) -> list:
                     _stamp_plot_meta(fig, metric)
                     plots.append(fig)
         else:
-            for region in _region_columns(data):
+            for region in data[1:]:
                 fig = go.Figure()
                 fig.add_trace(
                     go.Box(
