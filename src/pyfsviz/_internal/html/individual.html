@@ -3,7 +3,6 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="generator" content="MRIQC" />
 <title>FreeSurfer: Individual Report</title>
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
 <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
@@ -67,34 +66,6 @@ div#accordionOther {
 .summary-status-unknown { color: #666; }
 .summary-flag { color: #b34700; font-weight: 600; }
 
-.surf-layout.has-legend {
-  display: grid;
-  grid-template-columns: minmax(13rem, 16.5rem) minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
-}
-.aparc-legend-float {
-  position: sticky;
-  top: 3.5rem;
-  z-index: 1020;
-  max-height: calc(100vh - 4.25rem);
-  overflow: auto;
-  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12);
-}
-.aparc-legend-float .card-body {
-  padding: 0.75rem;
-}
-.aparc-legend {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.15rem 0.5rem;
-  font-size: 0.8rem;
-}
-.aparc-legend-item {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
 .aparc-swatch {
   display: inline-block;
   width: 0.85rem;
@@ -102,25 +73,6 @@ div#accordionOther {
   margin-right: 0.4rem;
   flex: 0 0 0.85rem;
   border: 1px solid #888;
-}
-@media (max-width: 767.98px) {
-  .surf-layout.has-legend {
-    grid-template-columns: 1fr;
-  }
-  .aparc-legend-float {
-    top: 3.5rem;
-    max-height: 30vh;
-  }
-  .aparc-legend {
-    grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
-  }
-}
-@media print {
-  .aparc-legend-float {
-    position: static;
-    max-height: none;
-    box-shadow: none;
-  }
 }
 
 .js-zoom-image {
@@ -325,22 +277,6 @@ div#accordionOther {
 </div>
 
 <h2 id="surf" class="mt-5 mb-2">Surfaces</h2>
-<div class="surf-layout{% if surf_legend %} has-legend{% endif %}">
-{% if surf_legend %}
-    <aside class="card mt-2 aparc-legend-float" aria-label="Aparc region legend">
-        <div class="card-body">
-        <p class="text-muted small mb-2">Desikan–Killiany (<code>aparc</code>) colors. Stays visible while you scroll the surfaces.</p>
-        <div class="aparc-legend">
-            {% for item in surf_legend %}
-            <div class="aparc-legend-item">
-                <span class="aparc-swatch" style="background: {{ item.color }};"></span>
-                {{ item.name }}
-            </div>
-            {% endfor %}
-        </div>
-        </div>
-    </aside>
-{% endif %}
     <div class="surf-images">
 {% for label, img_path in surf %}
     <div class="card mt-2">
@@ -351,7 +287,6 @@ div#accordionOther {
     </div>
 {% endfor %}
     </div>
-</div>
 
 </div>
 </div>
