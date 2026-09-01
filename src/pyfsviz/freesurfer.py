@@ -114,15 +114,6 @@ def _subjects_dir_env(subjects_dir: Path) -> Iterator[None]:
             os.environ["SUBJECTS_DIR"] = original
 
 
-_APARC_LEGEND_SKIP = {
-    "",
-    "???",
-    "corpuscallosum",
-    "medial wall",
-    "medialwall",
-    "none",
-    "unknown",
-}
 _SURF_VIEWS = (
     ("lateral", 0, 0),
     ("medial", 0, 1),
@@ -375,6 +366,7 @@ class FreeSurfer:
             """Path to the subjects directory."""
         else:
             self.subjects_dir = Path(subjects_dir)
+            os.environ["SUBJECTS_DIR"] = Path(subjects_dir)
             """Path to the subjects directory."""
         if not self.subjects_dir.exists():
             raise FileNotFoundError(f"SUBJECTS_DIR not found: {self.subjects_dir}")
