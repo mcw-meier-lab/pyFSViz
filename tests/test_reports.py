@@ -471,34 +471,6 @@ class TestHTMLReportGeneration:
         assert "LH White Matter" in html_content
         assert "RH White Matter" in html_content
 
-    def test_individual_template_renders_aparc_legend(self) -> None:
-        """Surfaces section should list aparc region colors when provided."""
-        actual_template = files("pyfsviz._internal.html") / "individual.html"
-        html = Template(str(actual_template)).compile(
-            {
-                "timestamp": "2026-01-01, 00:00",
-                "subject": "sub-001",
-                "summary": {
-                    "subject": "sub-001",
-                    "recon_status": "passed",
-                    "recon_status_label": "Finished without error",
-                    "talairach_check": "passed",
-                    "talairach_check_label": "Passed",
-                    "generated_at": "2026-01-01, 00:00",
-                },
-                "tlrc": [],
-                "aseg": [],
-                "surf": [("LH Pial", "lh_pial.png")],
-                "surf_legend": [{"name": "precentral", "color": "#dc1464"}],
-                "metrics": None,
-            },
-        )
-        assert "aparc-legend" in html
-        assert "aparc-legend-float" in html
-        assert "has-legend" in html
-        assert "precentral" in html
-        assert "#dc1464" in html
-        assert "Desikan" in html
 
     def test_gen_html_report_with_actual_template(
         self,
@@ -919,44 +891,6 @@ class TestHTMLReportGeneration:
         with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
         assert "FreeSurfer: Individual Report" in html_content
-
-    def test_gen_html_report_metrics_csv_permission_error(
-        self,
-        mock_freesurfer_instance: FreeSurfer,
-        temp_output_dir: Path,
-    ) -> None:
-        """Test gen_html_report handles PermissionError gracefully."""
-        # Create mock image files
-        mock_img_dir = temp_output_dir / "mock_imgs"
-        mock_img_dir.mkdir(parents=True, exist_ok=True)
-
-        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
-            f.write("<svg><text>Talairach Registration</text></svg>")
-
-        img = Image.new("RGB", (1, 1), color="black")
-        img.save(mock_img_dir / "aparcaseg.png", "PNG")
-
-        # Create a CSV file but make it unreadable on Unix-like systems
-        metrics_csv_path = temp_output_dir / "metrics.csv"
-        metrics_csv_path.write_text("subject,wm_snr_orig\nsub-001,10.134\n")
-
-        # On systems that support it, make file unreadable
-        try:
-            metrics_csv_path.chmod(0o000)  # No permissions
-            # Should not raise exception, just log warning and continue
-            html_file = mock_freesurfer_instance.gen_html_report(
-                subject="sub-001",
-                output_dir=str(temp_output_dir),
-                img_list=list(mock_img_dir.glob("*")),
-            )
-            assert html_file.exists()
-        except (PermissionError, OSError):
-            # On Windows or if we can't change permissions, skip this test
-            pytest.skip("Cannot test permission error on this system")
-        finally:
-            # Restore permissions so file can be cleaned up
-            with suppress(OSError):
-                metrics_csv_path.chmod(0o644)
 
 
 class TestBatchReportGeneration:

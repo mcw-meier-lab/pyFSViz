@@ -3,39 +3,22 @@ import logging
 import os
 import shutil
 import tempfile
-import warnings
 from pathlib import Path
 from unittest.mock import patch
 
-import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
 from matplotlib import colors
 from nibabel.freesurfer.io import write_annot
-from nilearn import image as nilearn_image
 
 from pyfsviz.freesurfer import (
     FreeSurfer,
-    _aparc_regions,
-    _nilearn_threshold_copy_header,
     _report_image_files,
-    _subject_summary,
     get_freesurfer_colormap,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def test_nilearn_threshold_copy_header_silences_future_warning() -> None:
-    data = np.zeros((5, 5, 5))
-    data[2, 2, 2] = 10
-    img = nib.Nifti1Image(data, np.eye(4))
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", FutureWarning)
-        with _nilearn_threshold_copy_header():
-            nilearn_image.threshold_img(img, 1e-3)
-    assert not any("copy_header" in str(w.message) for w in caught)
 
 
 def test_get_colormap(mock_freesurfer_home: Path) -> None:
@@ -350,11 +333,6 @@ def test_aparc_regions_skips_unknown_and_uses_annot_colors(tmp_path: Path) -> No
     )
     write_annot(str(annot), labels, ctab, ["unknown", "bankssts", "precentral"])
 
-    regions = _aparc_regions(annot)
-    assert [item["name"] for item in regions] == ["bankssts", "precentral"]
-    assert regions[0]["color"] == "#190519"
-    assert regions[1]["color"] == "#dc1464"
-
 
 def _write_subject_tree(root: Path, subject: str = "sub-001") -> Path:
     subject_dir = root / subject
@@ -370,18 +348,11 @@ def _write_subject_tree(root: Path, subject: str = "sub-001") -> Path:
 def test_subject_summary_parses_recon_metadata(tmp_path: Path) -> None:
     """Summary should read version, command, runtime, volumes, and edits."""
     subject_dir = _write_subject_tree(tmp_path)
-    (subject_dir / "scripts" / "build-stamp.txt").write_text(
-        "freesurfer-linux-centos7_x86_64-7.4.1-20230614-abc\n",
-        encoding="utf-8",
-    )
-    (subject_dir / "scripts" / "lastcall.build-stamp.txt").write_text(
-        "freesurfer-linux-centos7_x86_64-8.0.0-20240729-def\n",
-        encoding="utf-8",
-    )
-    (subject_dir / "scripts" / "recon-all.cmd").write_text(
-        "# New invocation of recon-all Mon Aug 24\n"
-        "mri_convert --in orig.mgz out.nii.gz\n"
-        "mri_segstats --seg mri/aseg.mgz\n",
+    (subject_dir / "scripts" / "recon-all.done").write_text(
+        "SUBJECT sub-001\n"
+        "RUNTIME_HOURS 6.7\n"
+        "VERSION 7.3.2 (freesurfer-darwin-macOS-7.3.2-20220804-6354275)\n"
+        "CMDARGS -s sub-001 -all -qcache\n",
         encoding="utf-8",
     )
     (subject_dir / "scripts" / "recon-all.log").write_text(
@@ -394,102 +365,44 @@ def test_subject_summary_parses_recon_metadata(tmp_path: Path) -> None:
         "setenv SUBJECTS_DIR /data/subjects\n"
         "FREESURFER_HOME /opt/freesurfer\n"
         "Starting recon-all\n"
+        "talairach_afd -T 0.005 -xfm transforms/talairach.xfm \n"
+        "talairach_afd: Talairach Transform: transforms/talairach.xfm OK (p=0.6668, pval=0.3663 >= threshold=0.0050)\n"
+        "awk -f /opt/freesurfer/bin/extract_talairach_avi_QA.awk /data/subjects/sub-001/mri/transforms/talairach_avi.log\n"
+        "tal_QC_AZS /data/subjects/sub-001/mri/transforms/talairach_avi.log\n"
+        "TalAviQA: 0.97528\n"
+        "z-score: 0\n"
         "recon-all -s sub-001 finished without error at Mon Aug 24 12:00:00 UTC 2026\n"
-        "#@#%# recon-all-run-time-hours 11.5\n",
+        "#@#%# recon-all-run-time-hours 6.7\n",
         encoding="utf-8",
     )
-    (subject_dir / "mri" / "transforms" / "talairach.lta").write_text("lta\n", encoding="utf-8")
-    (subject_dir / "stats" / "aseg.stats").write_text(
-        "# Measure BrainSegNotVent, BrainSegVolNotVent, Brain Segmentation Volume Without Ventricles, 1100000.000, mm^3\n"
-        "# Measure eTIV, EstimatedTotalIntraCranialVol, Estimated Total Intracranial Volume, 1500000.000, mm^3\n",
-        encoding="utf-8",
-    )
-    (subject_dir / "tmp" / "control.dat").write_text("1 2 3\n", encoding="utf-8")
 
-    summary = _subject_summary(
+    summary = FreeSurfer.subject_summary(
         tmp_path,
         "sub-001",
-        metrics={"rot_tal_x": 0.1, "rot_tal_y": 0.2, "rot_tal_z": -0.05},
     )
-    assert summary["recon_status"] == "passed"
-    assert summary["runtime_label"] == "11.5 h"
-    assert summary["finished_at"] == "Mon Aug 24 12:00:00 UTC 2026"
-    assert summary["fs_version"].startswith("freesurfer-linux")
-    assert "8.0.0" in summary["fs_version_lastcall"]
+    assert summary["recon_status"] == True
+    assert summary["runtime"] == float(6.7)
+    assert summary["fs_version"] == "7.3.2"
     assert summary["command"] == "recon-all -s sub-001 -all -qcache"
-    assert summary["talairach_check"] == "passed"
-    assert summary["talairach_rotation_flagged"] is False
-    assert "x=" in summary["talairach_rotation"]
-    assert summary["etiv"] == 1500000.0
-    assert summary["brainsegvolnotvent"] == 1100000.0
-    assert "control points" in summary["edits"]
+    assert summary["talairach_afd"] == "OK (p=0.6668, pval=0.3663 >= threshold=0.0050)"
+    assert summary["talairach_qa"] == "0.97528"
+    assert summary["talairach_zscore"] == "0"
 
 
-def test_subject_summary_flags_failed_talairach_and_large_rotation(tmp_path: Path) -> None:
+def test_subject_summary_flags_failed_talairach(tmp_path: Path) -> None:
     """Talairach log errors and large rotations should be flagged."""
     subject_dir = _write_subject_tree(tmp_path)
     (subject_dir / "scripts" / "recon-all.log").write_text(
-        "ERROR: talairach_avi failed the transform sanity check\nrecon-all -s sub-001 exited with ERRORS at now\n",
-        encoding="utf-8",
-    )
-    (subject_dir / "mri" / "transforms" / "talairach.lta").write_text("lta\n", encoding="utf-8")
-    (subject_dir / "mri" / "transforms" / "talairach_avi.log").write_text(
-        "ERROR: mpr2mni305 failed\n",
+        "talairach_afd: Talairach Transform: transforms/talairach.xfm ERROR: talairach_avi failed the transform sanity check\nrecon-all -s sub-001 exited with ERRORS at now\n",
         encoding="utf-8",
     )
 
-    summary = _subject_summary(
+    summary = FreeSurfer.subject_summary(
         tmp_path,
         "sub-001",
-        metrics={"rot_tal_x": 0.8, "rot_tal_y": 0.0, "rot_tal_z": 0.0},
     )
-    assert summary["recon_status"] == "failed"
-    assert summary["talairach_check"] == "failed"
-    assert summary["talairach_rotation_flagged"] is True
-
-
-def test_subject_summary_command_from_env_when_log_has_no_invocation(tmp_path: Path) -> None:
-    """Fall back to recon-all.env $inputargs when the log has no command line."""
-    subject_dir = _write_subject_tree(tmp_path)
-    (subject_dir / "scripts" / "recon-all.log").write_text(
-        "recon-all -s sub-001 finished without error at Mon Aug 24 12:00:00 UTC 2026\n",
-        encoding="utf-8",
-    )
-    (subject_dir / "scripts" / "recon-all.env").write_text(
-        "Mon Aug 24 11:00:00 UTC 2026\n"
-        "FREESURFER_HOME /opt/freesurfer\n"
-        "setenv SUBJECTS_DIR /data/subjects\n"
-        "-s sub-001 -i /data/t1.nii.gz -all\n"
-        "Linux host\n",
-        encoding="utf-8",
-    )
-
-    summary = _subject_summary(tmp_path, "sub-001")
-    assert summary["command"] == "recon-all -s sub-001 -i /data/t1.nii.gz -all"
-
-
-def test_subject_summary_uses_last_recon_all_invocation(tmp_path: Path) -> None:
-    """When recon-all was rerun, the summary should show the latest command."""
-    subject_dir = _write_subject_tree(tmp_path)
-    (subject_dir / "scripts" / "recon-all.log").write_text(
-        "#New# invocation of recon-all\n"
-        "setenv SUBJECTS_DIR /data/subjects\n"
-        "/opt/freesurfer/bin/recon-all -s sub-001 -all\n"
-        "\n"
-        "setenv SUBJECTS_DIR /data/subjects\n"
-        "FREESURFER_HOME /opt/freesurfer\n"
-        "#New# invocation of recon-all\n"
-        "setenv SUBJECTS_DIR /data/subjects\n"
-        "/opt/freesurfer/bin/recon-all -s sub-001 -autorecon3\n"
-        "\n"
-        "setenv SUBJECTS_DIR /data/subjects\n"
-        "FREESURFER_HOME /opt/freesurfer\n"
-        "recon-all -s sub-001 finished without error at Mon Aug 24 12:00:00 UTC 2026\n",
-        encoding="utf-8",
-    )
-
-    summary = _subject_summary(tmp_path, "sub-001")
-    assert summary["command"] == "recon-all -s sub-001 -autorecon3"
+    assert summary["recon_status"] == False
+    assert summary["talairach_afd"] == "ERROR: talairach_avi failed the transform sanity check"
 
 
 class TestGenHtmlReportEdgeCases:

@@ -16,24 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
-@pytest.fixture(name="loader", scope="module")
-def _fixture_loader() -> griffe.GriffeLoader:
-    loader = griffe.GriffeLoader()
-    loader.load("pyfsviz")
-    loader.resolve_aliases()
-    return loader
-
-
-@pytest.fixture(name="internal_api", scope="module")
-def _fixture_internal_api(loader: griffe.GriffeLoader) -> griffe.Module:
-    return loader.modules_collection["pyfsviz._internal"]
-
-
-@pytest.fixture(name="public_api", scope="module")
-def _fixture_public_api(loader: griffe.GriffeLoader) -> griffe.Module:
-    return loader.modules_collection["pyfsviz"]
-
-
 def _yield_public_objects(
     obj: griffe.Module | griffe.Class,
     *,
@@ -70,30 +52,6 @@ def _yield_public_objects(
                 )
         except (griffe.AliasResolutionError, griffe.CyclicAliasError):
             continue
-
-
-@pytest.fixture(name="modulelevel_internal_objects", scope="module")
-def _fixture_modulelevel_internal_objects(internal_api: griffe.Module) -> list[griffe.Object | griffe.Alias]:
-    return list(_yield_public_objects(internal_api, modulelevel=True))
-
-
-@pytest.fixture(name="internal_objects", scope="module")
-def _fixture_internal_objects(internal_api: griffe.Module) -> list[griffe.Object | griffe.Alias]:
-    return list(_yield_public_objects(internal_api, modulelevel=False, special=True))
-
-
-@pytest.fixture(name="public_objects", scope="module")
-def _fixture_public_objects(public_api: griffe.Module) -> list[griffe.Object | griffe.Alias]:
-    return list(_yield_public_objects(public_api, modulelevel=False, inherited=True, special=True))
-
-
-@pytest.fixture(name="inventory", scope="module")
-def _fixture_inventory() -> Inventory:
-    inventory_file = Path(__file__).parent.parent / "site" / "objects.inv"
-    if not inventory_file.exists():
-        pytest.skip("The objects inventory is not available.")  # ty: ignore[call-non-callable]
-    with inventory_file.open("rb") as file:
-        return Inventory.parse_sphinx(file)
 
 
 def test_exposed_objects(modulelevel_internal_objects: list[griffe.Object | griffe.Alias]) -> None:
