@@ -74,7 +74,7 @@ fs.gen_group_report(
 ```
 
 When group directories differ from `SUBJECTS_DIR`, pyFSViz temporarily sets
-`SUBJECTS_DIR` per group so the table commands read the right tree.
+`SUBJECTS_DIR` per group so the table commands read the right tree. (pyFSViz wraps the FreeSurfer `stats2table` commands in nipype-style wrappers to generate the tables, so `SUBJECTS_DIR` must be set).
 
 ## What the report contains
 
@@ -87,7 +87,7 @@ When group directories differ from `SUBJECTS_DIR`, pyFSViz temporarily sets
 - Plotly outlier/distribution plots, also one tab per stats table
 
 Group comparison is visual only: each plot shows the value distribution by
-group, with one point per subject. There are no t-tests or p-values.
+group, with one point per subject.
 
 Example plots below are from
 [OpenNeuro ds004731](https://doi.org/10.18112/openneuro.ds004731.v1.0.0).
@@ -109,14 +109,9 @@ When `groups=` is set, each metric gets a box + strip plot by group:
 
 `gen_group_report` calls `get_stats()` to build:
 
-- `aseg.csv` — subcortical volumes (`asegstats2table`). The first column is
-  `ID`. If a subject has `stats/synthseg.vol.csv`, SynthSeg total intracranial
-  volume is merged in.
+- `aseg.csv` — subcortical volumes (`asegstats2table`). If a subject has `stats/synthseg.vol.csv` or similar, SynthSeg total intracranial volume is merged in. (See [Prerequisites](prerequisites.md) for more information on this measure).
 - Per-hemisphere aparc tables for area, volume, and thickness
-  (`lh_area_aparc.csv`, `rh_thickness_aparc.csv`, …), also with `ID` first
-- `combined_aparc.csv` — one row per subject, `ID` first; remaining columns
-  keep hemisphere, region, and measure (`lh_bankssts_area`,
-  `rh_superiorfrontal_thickness`, …)
+  (`lh_area_aparc.csv`, `rh_thickness_aparc.csv`, …)
 
 Use these CSVs directly, or see [Stats and outliers](stats.md) to run the
 same helpers without generating HTML.

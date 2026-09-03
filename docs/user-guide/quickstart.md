@@ -41,8 +41,7 @@ results = fs.gen_batch_reports("reports/", skip_existing=True)
 ```
 
 Each subject is written to `reports/<subject>/<subject>.html`, with adjacent
-PNG/SVG images. The return value maps subject IDs to a `Path` on success or
-an `Exception` if that subject failed.
+PNG/SVG images.
 
 ![Example individual report summary](../assets/examples/individual-summary.png){ width="640" }
 
