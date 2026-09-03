@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import griffe
-import pytest
 from mkdocstrings import Inventory
 
 import pyfsviz

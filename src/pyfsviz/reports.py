@@ -3,7 +3,7 @@
 
 # HTML reporting derived from nipreps MRIQC setup.
 # Changes involve html content: FreeSurfer-related images and plots.
-# Intended to keep the look and feel of nipreps MRIQC-style reports, but 
+# Intended to keep the look and feel of nipreps MRIQC-style reports, but
 # for FreeSurfer data.
 
 # ORIGINAL WORK'S ATTRIBUTION NOTICE

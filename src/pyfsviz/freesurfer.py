@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 import fsqc
 import numpy as np
 import pandas as pd
-from importlib_resources import files
 from fsqc.fsqcUtils import returnFreeSurferColorLUT
+from importlib_resources import files
 from matplotlib import colors
 from matplotlib import pyplot as plt
 from nibabel.freesurfer.io import read_annot
@@ -552,14 +552,14 @@ class FreeSurfer:
 
         return tlrc
 
-        
     def _get_recon_info(self, subject: str) -> dict[str, Any] | None:
         """Collect additional information from the FreeSurfer run, including
-        FreeSurfer version, runtime, and command used."""
+        FreeSurfer version, runtime, and command used.
+        """
         done_file = self.subjects_dir / subject / "scripts" / "recon-all.done"
 
         if not done_file:
-            return {"runtime": None, "version": None, "command":None}
+            return {"runtime": None, "version": None, "command": None}
 
         info = {}
         with open(done_file, encoding="utf-8") as f:
@@ -614,7 +614,6 @@ class FreeSurfer:
             "talairach_qa": tlrc_info["qa"],
             "talairach_zscore": tlrc_info["z-score"],
         }
-        
 
     def gen_tlrc_data(self, subject: str, output_dir: str) -> None:
         """Generate inverse talairach data for report generation.

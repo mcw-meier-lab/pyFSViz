@@ -516,7 +516,7 @@ def compare_group_metrics(
 
     for metric_name, data in metrics.items():
         comparison[metric_name] = {}
-        for region in data[1:]: #skip id column
+        for region in data[1:]:  # skip id column
             grouped_values = _group_values(data, region, groups)
             comparison[metric_name][region] = {
                 group_name: {
@@ -662,10 +662,7 @@ def check_metrics(stats_files: list[Path], sd_threshold: float = 3.0) -> dict:
         metric_summary[metric] = {}
 
         # Get column names - skip first column (subject_id) and last few columns (typically metadata)
-        region_cols = [
-            col
-            for col in data.columns[1:]
-        ]
+        region_cols = [col for col in data.columns[1:]]
         id_col = data.columns[0]
 
         for region in region_cols:

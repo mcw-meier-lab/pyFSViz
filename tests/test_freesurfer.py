@@ -381,7 +381,7 @@ def test_subject_summary_parses_recon_metadata(tmp_path: Path) -> None:
         "sub-001",
     )
     assert summary["recon_status"] == True
-    assert summary["runtime"] == float(6.7)
+    assert summary["runtime"] == 6.7
     assert summary["fs_version"] == "7.3.2"
     assert summary["command"] == "recon-all -s sub-001 -all -qcache"
     assert summary["talairach_afd"] == "OK (p=0.6668, pval=0.3663 >= threshold=0.0050)"

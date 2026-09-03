@@ -4,7 +4,6 @@ import datetime
 import inspect
 import re
 import tempfile
-from contextlib import suppress
 from pathlib import Path
 
 import numpy as np
@@ -470,7 +469,6 @@ class TestHTMLReportGeneration:
         assert "RH Inflated" in html_content
         assert "LH White Matter" in html_content
         assert "RH White Matter" in html_content
-
 
     def test_gen_html_report_with_actual_template(
         self,
