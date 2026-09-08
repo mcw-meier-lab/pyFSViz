@@ -40,18 +40,6 @@ are still processed.
 
 Set `skip_failed=False` to abort on the first failure.
 
-Inspect results:
-
-```python
-from pathlib import Path
-
-for subject, result in results.items():
-    if isinstance(result, Path):
-        print(f"{subject}: {result}")
-    else:
-        print(f"{subject} failed: {result}")
-```
-
 ## What each report contains
 
 For every subject, batch generation:
@@ -64,6 +52,8 @@ For every subject, batch generation:
 4. Renders left/right pial, inflated, and white surfaces
    (`gen_surf_plots`).
 5. Writes HTML with `gen_html_report`.
+
+Please note that [Deep-MI's fsqc](https://github.com/Deep-MI/fsqc/tree/stable) is used to generate the `aparc+aseg` mosaic. This automatically generates the `metrics.csv` file as well.
 
 Open `{output_dir}/{subject}/{subject}.html` in a browser. Images are
 referenced next to the HTML file, so keep that directory together if you copy
@@ -78,16 +68,15 @@ The script used to generate them is
 ### Summary
 
 The **Summary** card is filled from the subject tree (`scripts/`,
-`stats/aseg.stats`, Talairach transforms) plus fsqc rotation when
+`stats/aseg.stats`, Talairach transforms) plus `fsqc` rotation when
 `metrics.csv` is present.
 
 ![Individual report summary card](../assets/examples/individual-summary.png){ width="720" }
 
 ### Metrics
 
-The **Metrics** table is the fsqc row from
+The **Metrics** table is the `fsqc` row from
 `{output_dir}/{subject}/metrics.csv` (written by `gen_aparcaseg_plots`).
-Older reports that only have `metrics.csv` at the reports root still work.
 
 ![Individual report metrics table](../assets/examples/individual-metrics.png){ width="720" }
 
@@ -104,11 +93,7 @@ higher magnification: drag to pan, scroll to zoom, Esc or **Close** to return.
 
 ### Surfaces
 
-Surface views are colored with the subject's `aparc` annotation. A region
-legend sits in a sticky sidebar next to those plots so it stays visible
-while you scroll. Regenerating surface images (`gen_images=True`) is needed
-if older PNGs were colored with the full FreeSurfer LUT instead of
-annotation colors.
+Surface views are colored with the subject's `aparc` annotation.
 
 ![Left hemisphere pial surface](../assets/examples/individual-lh_pial.png){ width="720" }
 
@@ -166,6 +151,7 @@ changes such as mosaic zoom; leave `skip_existing=False` so existing
 
 Pass `template=` to `gen_batch_reports` or `gen_html_report` with a path to a
 Jinja2 file. The default template receives `timestamp`, `subject`, `summary`
-(recon-all status, FreeSurfer version, command, Talairach check, eTIV, …),
+(recon-all status, FreeSurfer version, command, Talairach check, …),
 `tlrc` (SVG markup), `aseg` (image filenames), `surf` (label, filename pairs),
-`surf_legend` (aparc name/color pairs), and `metrics` (optional fsqc dict).
+`surf_legend` (aparc name/color pairs), and `metrics` (optional `fsqc` dict).
+The default template used here is based off the [nipreps MRIQC](https://github.com/nipreps/mriqc) reports.

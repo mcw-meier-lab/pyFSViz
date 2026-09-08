@@ -4,7 +4,7 @@ title: Installation
 
 # Installation
 
-Install the Python package from PyPI. This does **not** install FreeSurfer or
+It's recommended to install pyFSViz through PyPI. Please note, this does **not** install FreeSurfer or
 FSL; those must be set up separately. See [Prerequisites](prerequisites.md).
 
 Requires Python 3.10 or newer.

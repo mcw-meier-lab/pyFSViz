@@ -1,4 +1,13 @@
-# Copyright 2025 Lezlie España <www.github.com/l-espana>
+# Licensed under package MIT License
+# Copyright (c) 2025-2026 mcw-meier-lab
+
+# HTML reporting derived from nipreps MRIQC setup.
+# Changes involve html content: FreeSurfer-related images and plots.
+# Intended to keep the look and feel of nipreps MRIQC-style reports, but
+# for FreeSurfer data.
+
+# ORIGINAL WORK'S ATTRIBUTION NOTICE
+# Copyright 2021 The NiPreps Developers <nipreps@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +20,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# We support and encourage derived works from this project, please read
+# about our expectations at
+#
+#     https://www.nipreps.org/community/licensing/
+#
 
 
 """Utility class for generating a config file from a jinja template.

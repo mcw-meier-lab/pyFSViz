@@ -77,28 +77,6 @@ through nipype. Group-only stats reports do not require FSL.
 Unlike FreeSurfer, pyFSViz has no constructor argument for FSL. nipype locates
 `flirt` from the environment (`FSLDIR` and `PATH`).
 
-## Check the environment
-
-Run these in the same shell you will use for pyFSViz to verify your environment:
-
-```bash
-echo "$FREESURFER_HOME"
-echo "$SUBJECTS_DIR"
-echo "$FSLDIR"
-command -v mri_convert
-command -v asegstats2table
-command -v flirt
-```
-
-Each variable should print a real directory, and each `command -v` should print
-a binary path. If any are empty, the corresponding tool is not initialized in
-this session.
-
-On a cluster, `module load freesurfer` / `module load fsl` is only enough when
-the module also sources the vendor scripts (or you source them afterwards in
-the job). Initialize both tools in the submission script, not only in an
-interactive login shell.
-
 ## Expected FreeSurfer subjects
 
 pyFSViz does not create reconstructions. Each subject directory under
@@ -115,8 +93,9 @@ pyFSViz does not create reconstructions. Each subject directory under
 `mri/transforms/talairach.lta`. Batch reports warn when `recon-all.log` does
 not end with `finished without error`.
 
+Note that due to some bugs with printing the total intracranial volume [see release notes](https://surfer.nmr.mgh.harvard.edu/fswiki/ReleaseNotes) and discussions around the [default processing](https://surfer.nmr.mgh.harvard.edu/fswiki/eTIV) FreeSurfer uses to calculate this metric, it's recommended to use some version of synthseg or samseg to perform a more robust calculation. While pyFSViz does not run these separate commands, it does look for files like `synthseg.vol.csv` and inserts the total intracranial volume into the aseg stats collection file when it's available.
+
 FreeSurfer 7 and 8 reconstructions are both used. The package already handles
-the extra LUT column in FreeSurfer 8+ and optional SynthSeg intracranial
-volume in group tables.
+the extra LUT column in FreeSurfer 8+.
 
 Continue with [Installation](installation.md) and [Quick start](quickstart.md).

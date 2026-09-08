@@ -27,7 +27,7 @@ Optional `measures` (default `area`, `volume`, `thickness`) and `hemis`
 ## Outliers
 
 `check_metrics()` flags values more than `sd_threshold` standard deviations
-from the cohort mean, per region, skipping combined aparc files:
+from the cohort mean, per region:
 
 ```python
 from pyfsviz.stats import check_metrics, summarize_outlier_subjects
@@ -56,10 +56,7 @@ figures = gen_group_comparison_plots(files, groups)
 
 These are Plotly box plots (one per metric region) with a point per subject.
 The group HTML report embeds the same figures in one tab per stats table
-(aseg, LH Area, RH Thickness, …). There are no t-tests or p-values.
-
-`compare_group_metrics` returns per-group `n`, `mean`, and `std` if you want
-numeric summaries without plotting.
+(aseg, LH Area, RH Thickness, …).
 
 ## Distribution plots
 
@@ -71,6 +68,6 @@ plots = gen_metric_plots(files)
 
 These are Plotly figures (the same family embedded in the group report).
 One figure is created per region in each stats table (`aseg`, `lh_area_aparc`,
-and so on). Combined aparc files are skipped.
+and so on).
 
 For the HTML wrapper, see [Group reports](group-reports.md).
