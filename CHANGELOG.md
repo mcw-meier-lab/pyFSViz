@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.6.2](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.2) - 2026-09-08
+
+<small>[Compare with 0.6.1](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.1...0.6.2)</small>
+
+### Code Refactoring
+
+- test and check fixes; added back some logic that was needed ([d6693ca](https://github.com/mcw-meier-lab/pyFSViz/commit/d6693cafabe6ae14a5e3685e4359c82473a90e27) by Lezlie Espana).
+- surf legend removal; ensure SUBJECTS_DIR is set ([e0d9637](https://github.com/mcw-meier-lab/pyFSViz/commit/e0d963799bd21fd8664d298d679efb1c35a102e9) by Lezlie Espana).
+- header cleanup ([76a81ed](https://github.com/mcw-meier-lab/pyFSViz/commit/76a81edc704646b937d4fe2f0e40af791bd74dd7) by Lezlie Espana).
+- update license info; remove surf legend ([5812b58](https://github.com/mcw-meier-lab/pyFSViz/commit/5812b5834b73b5b2d824712177df486ac63ea1a7) by Lezlie Espana).
+- stats cleanup ([dcc9c35](https://github.com/mcw-meier-lab/pyFSViz/commit/dcc9c35ba8060180b9877e930271d94f6b38a4e7) by Lezlie Espana).
+- update fsqc colormap code ([05f561b](https://github.com/mcw-meier-lab/pyFSViz/commit/05f561b2cefe62fc382a8583f7a39bde818e2732) by Lezlie Espana).
+- remove surface legend ([e4b3f7e](https://github.com/mcw-meier-lab/pyFSViz/commit/e4b3f7e7016606ef6972cd4f222c01d17662f9cc) by Lezlie Espana).
+- clean up summary info ([194244d](https://github.com/mcw-meier-lab/pyFSViz/commit/194244dfd05a237abe55f2bcb8a2cbc3a68e34e3) by Lezlie Espana).
+
 ## [0.6.1](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.1) - 2026-08-25
 
 <small>[Compare with 0.6.0](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.0...0.6.1)</small>
