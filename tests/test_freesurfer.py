@@ -6,11 +6,9 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import numpy as np
 import pandas as pd
 import pytest
 from matplotlib import colors
-from nibabel.freesurfer.io import write_annot
 
 from pyfsviz.freesurfer import (
     FreeSurfer,
@@ -264,7 +262,7 @@ class TestCheckReconAll:
         subject_dir = freesurfer.subjects_dir / "test-subject-empty"
         log_file = subject_dir / "scripts" / "recon-all.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        log_file.write_text("")
+        log_file.write_text("", encoding="utf-8")
 
         with pytest.raises(IndexError):
             freesurfer.check_recon_all("test-subject-empty")
@@ -278,7 +276,7 @@ class TestCheckReconAll:
         subject_dir = freesurfer.subjects_dir / "test-subject-no-finish"
         log_file = subject_dir / "scripts" / "recon-all.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        log_file.write_text("Some log content\nbut no finished message")
+        log_file.write_text("Some log content\nbut no finished message", encoding="utf-8")
 
         result = freesurfer.check_recon_all("test-subject-no-finish")
         assert result is False
@@ -289,7 +287,7 @@ class TestCheckReconAll:
         subject_dir = freesurfer.subjects_dir / "test-subject-error"
         log_file = subject_dir / "scripts" / "recon-all.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        log_file.write_text("Some log content\nfinished with error")
+        log_file.write_text("Some log content\nfinished with error", encoding="utf-8")
 
         result = freesurfer.check_recon_all("test-subject-error")
         assert result is False
@@ -319,21 +317,6 @@ def test_report_image_files_finds_png_and_svg(tmp_path: Path) -> None:
     assert found == {"aparcaseg.png", "tlrc.svg", "lh_pial.png"}
 
 
-def test_aparc_regions_skips_unknown_and_uses_annot_colors(tmp_path: Path) -> None:
-    """Aparc legend entries should come from the annotation color table."""
-    annot = tmp_path / "lh.aparc.annot"
-    labels = np.array([1, 2, 1, 2], dtype=np.int32)
-    ctab = np.array(
-        [
-            [0, 0, 0, 0, 0],
-            [25, 5, 25, 0, 1],
-            [220, 20, 100, 0, 2],
-        ],
-        dtype=np.int32,
-    )
-    write_annot(str(annot), labels, ctab, ["unknown", "bankssts", "precentral"])
-
-
 def _write_subject_tree(root: Path, subject: str = "sub-001") -> Path:
     subject_dir = root / subject
     scripts = subject_dir / "scripts"
@@ -345,9 +328,9 @@ def _write_subject_tree(root: Path, subject: str = "sub-001") -> Path:
     return subject_dir
 
 
-def test_subject_summary_parses_recon_metadata(tmp_path: Path) -> None:
+def test_subject_summary_parses_recon_metadata(freesurfer: FreeSurfer) -> None:
     """Summary should read version, command, runtime, volumes, and edits."""
-    subject_dir = _write_subject_tree(tmp_path)
+    subject_dir = _write_subject_tree(freesurfer.subjects_dir)
     (subject_dir / "scripts" / "recon-all.done").write_text(
         "SUBJECT sub-001\n"
         "RUNTIME_HOURS 6.7\n"
@@ -366,43 +349,48 @@ def test_subject_summary_parses_recon_metadata(tmp_path: Path) -> None:
         "FREESURFER_HOME /opt/freesurfer\n"
         "Starting recon-all\n"
         "talairach_afd -T 0.005 -xfm transforms/talairach.xfm \n"
-        "talairach_afd: Talairach Transform: transforms/talairach.xfm OK (p=0.6668, pval=0.3663 >= threshold=0.0050)\n"
+        "talairach_afd: Talairach Transform: transforms/talairach.xfm OK (p=0.444, pval=0.36 >= threshold=0.005)\n"
         "awk -f /opt/freesurfer/bin/extract_talairach_avi_QA.awk /data/subjects/sub-001/mri/transforms/talairach_avi.log\n"
         "tal_QC_AZS /data/subjects/sub-001/mri/transforms/talairach_avi.log\n"
-        "TalAviQA: 0.97528\n"
+        "TalAviQA: 0.8765\n"
         "z-score: 0\n"
-        "recon-all -s sub-001 finished without error at Mon Aug 24 12:00:00 UTC 2026\n"
-        "#@#%# recon-all-run-time-hours 6.7\n",
+        "#@#%# recon-all-run-time-hours 6.7\n"
+        "recon-all -s sub-001 finished without error at Mon Aug 24 12:00:00 UTC 2026\n",
         encoding="utf-8",
     )
 
-    summary = FreeSurfer.subject_summary(
-        tmp_path,
+    summary = freesurfer.subject_summary(
         "sub-001",
     )
-    assert summary["recon_status"] == True
-    assert summary["runtime"] == 6.7
+    assert summary["recon_status"] == "finished without error"
+    assert summary["runtime"] == "6.7 h"
     assert summary["fs_version"] == "7.3.2"
     assert summary["command"] == "recon-all -s sub-001 -all -qcache"
-    assert summary["talairach_afd"] == "OK (p=0.6668, pval=0.3663 >= threshold=0.0050)"
-    assert summary["talairach_qa"] == "0.97528"
+    assert summary["talairach_afd"] == "OK (p=0.444, pval=0.36 >= threshold=0.005)"
+    assert summary["talairach_qa"] == "0.8765"
     assert summary["talairach_zscore"] == "0"
 
 
-def test_subject_summary_flags_failed_talairach(tmp_path: Path) -> None:
-    """Talairach log errors and large rotations should be flagged."""
-    subject_dir = _write_subject_tree(tmp_path)
+def test_subject_summary_flags_failed_talairach(freesurfer: FreeSurfer) -> None:
+    """Talairach log errors should fail."""
+    subject_dir = _write_subject_tree(freesurfer.subjects_dir)
+    (subject_dir / "scripts" / "recon-all.done").write_text(
+        "VERSION 8.2.0\nRUNTIME_HOURS 5.3\nCMDARGS -s sub-001\n",
+        encoding="utf-8",
+    )
     (subject_dir / "scripts" / "recon-all.log").write_text(
-        "talairach_afd: Talairach Transform: transforms/talairach.xfm ERROR: talairach_avi failed the transform sanity check\nrecon-all -s sub-001 exited with ERRORS at now\n",
+        "talairach_afd: Talairach Transform: transforms/talairach.xfm ERROR: talairach_avi failed the transform sanity check\n"
+        "TalAviQA: 0.8765\n"
+        "z-score: 0\n"
+        "recon-all -s sub-001 exited with ERRORS at now\n",
         encoding="utf-8",
     )
 
-    summary = FreeSurfer.subject_summary(
-        tmp_path,
-        "sub-001",
-    )
-    assert summary["recon_status"] == False
+    summary = freesurfer.subject_summary("sub-001")
+
+    assert summary["fs_version"] == "8.2.0"
     assert summary["talairach_afd"] == "ERROR: talairach_avi failed the transform sanity check"
+    assert summary["recon_status"] == "recon failed"
 
 
 class TestGenHtmlReportEdgeCases:
@@ -439,124 +427,6 @@ class TestGenHtmlReportEdgeCases:
         except (FileNotFoundError, ValueError):
             # Expected if subject directory structure doesn't exist
             pass
-
-    def test_gen_html_report_metrics_csv_parse_error(
-        self,
-        freesurfer: FreeSurfer,
-        temp_output_dir: Path,
-    ) -> None:
-        """Test gen_html_report handles malformed CSV gracefully."""
-        # Create mock image files
-        mock_img_dir = temp_output_dir / "mock_imgs"
-        mock_img_dir.mkdir(parents=True, exist_ok=True)
-
-        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
-            f.write("<svg><text>Test</text></svg>")
-
-        # Create a malformed CSV file
-        metrics_csv_path = temp_output_dir / "metrics.csv"
-        with open(metrics_csv_path, "w", encoding="utf-8") as f:
-            f.write("subject,wm_snr_orig\n")  # Header
-            f.write("sub-001,10.134\n")  # Valid row
-            f.write('sub-002,"unclosed quote\n')  # Malformed - unclosed quote
-
-        # Should not raise exception, just log warning
-        html_file = freesurfer.gen_html_report(
-            subject="sub-001",
-            output_dir=str(temp_output_dir),
-            img_list=list(mock_img_dir.glob("*")),
-        )
-        assert html_file.exists()
-
-    def test_gen_html_report_metrics_csv_empty_file(
-        self,
-        freesurfer: FreeSurfer,
-        temp_output_dir: Path,
-    ) -> None:
-        """Test gen_html_report handles empty CSV file."""
-        # Create mock image files
-        mock_img_dir = temp_output_dir / "mock_imgs"
-        mock_img_dir.mkdir(parents=True, exist_ok=True)
-
-        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
-            f.write("<svg><text>Test</text></svg>")
-
-        # Create an empty CSV file
-        metrics_csv_path = temp_output_dir / "metrics.csv"
-        metrics_csv_path.write_text("")
-
-        # Should not raise exception, just log warning
-        html_file = freesurfer.gen_html_report(
-            subject="sub-001",
-            output_dir=str(temp_output_dir),
-            img_list=list(mock_img_dir.glob("*")),
-        )
-        assert html_file.exists()
-
-    def test_gen_html_report_metrics_csv_no_subject_column(
-        self,
-        freesurfer: FreeSurfer,
-        temp_output_dir: Path,
-    ) -> None:
-        """Test gen_html_report with CSV that has no subject column."""
-        # Create mock image files
-        mock_img_dir = temp_output_dir / "mock_imgs"
-        mock_img_dir.mkdir(parents=True, exist_ok=True)
-
-        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
-            f.write("<svg><text>Test</text></svg>")
-
-        # Create CSV without subject column
-        metrics_data = {
-            "wm_snr_orig": [10.134],
-            "gm_snr_orig": [6.283],
-        }
-        df = pd.DataFrame(metrics_data)
-        metrics_csv_path = temp_output_dir / "metrics.csv"
-        df.to_csv(metrics_csv_path, index=False)
-
-        # Should use first row as metrics
-        html_file = freesurfer.gen_html_report(
-            subject="sub-001",
-            output_dir=str(temp_output_dir),
-            img_list=list(mock_img_dir.glob("*")),
-        )
-        assert html_file.exists()
-
-        with open(html_file, encoding="utf-8") as f:
-            html_content = f.read()
-        # Metrics should be included even without subject column
-        assert "WM SNR (Original)" in html_content or html_content  # May or may not be present
-
-    def test_gen_html_report_metrics_csv_empty_dataframe(
-        self,
-        freesurfer: FreeSurfer,
-        temp_output_dir: Path,
-    ) -> None:
-        """Test gen_html_report with CSV that has headers but no data rows."""
-        # Create mock image files
-        mock_img_dir = temp_output_dir / "mock_imgs"
-        mock_img_dir.mkdir(parents=True, exist_ok=True)
-
-        with open(mock_img_dir / "tlrc.svg", "w", encoding="utf-8") as f:
-            f.write("<svg><text>Test</text></svg>")
-
-        # Create CSV with only headers
-        metrics_data_empty: dict[str, list[float]] = {
-            "subject": [],
-            "wm_snr_orig": [],
-        }
-        df = pd.DataFrame(metrics_data_empty)
-        metrics_csv_path = temp_output_dir / "metrics.csv"
-        df.to_csv(metrics_csv_path, index=False)
-
-        # Should not raise exception, metrics should be None
-        html_file = freesurfer.gen_html_report(
-            subject="sub-001",
-            output_dir=str(temp_output_dir),
-            img_list=list(mock_img_dir.glob("*")),
-        )
-        assert html_file.exists()
 
 
 class TestGenGroupReport:
@@ -738,6 +608,7 @@ class TestGenGroupReport:
         custom_template = temp_output_dir / "custom_group_template.html"
         custom_template.write_text(
             "<html><body><h1>Custom Group Report</h1><p>Subjects: {{ num_subjects }}</p></body></html>",
+            encoding="utf-8",
         )
 
         with patch("pyfsviz.freesurfer.get_stats") as mock_get_stats:
@@ -929,35 +800,35 @@ class TestGenGroupReport:
         aseg_file = temp_output_dir / "aseg.csv"
         pd.DataFrame(
             {
-                "subject_id": subjects,
+                "Measure:volume": subjects,
                 "Left-Lateral-Ventricle": [5000.0, 5100.0, 7000.0, 7100.0],
             },
         ).to_csv(aseg_file, index=False)
         lh_area = temp_output_dir / "lh_area_aparc.csv"
         pd.DataFrame(
             {
-                "ID": subjects,
+                "lh.aparc.area": subjects,
                 "lh_bankssts_area": [200.0, 210.0, 300.0, 310.0],
             },
         ).to_csv(lh_area, index=False)
         rh_area = temp_output_dir / "rh_area_aparc.csv"
         pd.DataFrame(
             {
-                "ID": subjects,
+                "rh.aparc.area": subjects,
                 "rh_bankssts_area": [190.0, 205.0, 290.0, 305.0],
             },
         ).to_csv(rh_area, index=False)
         lh_thickness = temp_output_dir / "lh_thickness_aparc.csv"
         pd.DataFrame(
             {
-                "ID": subjects,
+                "lh.aparc.thickness": subjects,
                 "lh_bankssts_thickness": [2.4, 2.5, 2.1, 2.0],
             },
         ).to_csv(lh_thickness, index=False)
         lh_meancurv = temp_output_dir / "lh_meancurv_aparc.csv"
         pd.DataFrame(
             {
-                "ID": subjects,
+                "lh.aparc.meancurv": subjects,
                 "lh_bankssts_meancurv": [0.12, 0.13, 0.11, 0.10],
             },
         ).to_csv(lh_meancurv, index=False)

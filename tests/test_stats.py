@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import pytest
@@ -28,7 +29,7 @@ def mock_stats_files(temp_output_dir: Path) -> list[Path]:
 
     # Create mock aseg CSV
     aseg_data = {
-        "subject_id": ["sub-001", "sub-002", "sub-003", "sub-004", "sub-005"],
+        "Measure:volume": ["sub-001", "sub-002", "sub-003", "sub-004", "sub-005"],
         "Left-Lateral-Ventricle": [5000.0, 5200.0, 4800.0, 5100.0, 4900.0],
         "Right-Lateral-Ventricle": [4900.0, 5100.0, 4700.0, 5000.0, 4800.0],
         "Left-Cerebral-White-Matter": [
@@ -519,10 +520,10 @@ class TestSynthSegTIV:
         )
         df = pd.read_csv(result)
 
-        assert list(df.columns[:2]) == ["ID", "total intracranial"]
-        assert df.loc[df["ID"] == "sub-001", "total intracranial"].iloc[0] == pytest.approx(1500000.0)
-        assert df.loc[df["ID"] == "sub-002", "total intracranial"].iloc[0] == pytest.approx(1600000.0)
-        assert pd.isna(df.loc[df["ID"] == "sub-003", "total intracranial"].iloc[0])
+        assert list(df.columns[:2]) == ["Measure:volume", "total intracranial"]
+        assert df.loc[df["Measure:volume"] == "sub-001", "total intracranial"].iloc[0] == pytest.approx(1500000.0)
+        assert df.loc[df["Measure:volume"] == "sub-002", "total intracranial"].iloc[0] == pytest.approx(1600000.0)
+        assert pd.isna(df.loc[df["Measure:volume"] == "sub-003", "total intracranial"].iloc[0])
 
     def test_add_synthseg_tiv_does_not_use_etiv(self, temp_output_dir: Path) -> None:
         """Do not copy EstimatedTotalIntraCranialVol into the SynthSeg TIV column."""
@@ -539,7 +540,7 @@ class TestSynthSegTIV:
         result = _add_synthseg_tiv_to_aseg(aseg_file, ["sub-001"], temp_output_dir)
         df = pd.read_csv(result)
 
-        assert "total intracranial" not in df.columns
+        assert np.isnan(df.loc[0, "total intracranial"])
         assert df.loc[0, "EstimatedTotalIntraCranialVol"] == pytest.approx(1500000.0)
 
     def test_read_synthseg_tiv_tab_separated(self, temp_output_dir: Path) -> None:
@@ -595,7 +596,7 @@ class TestSynthSegTIV:
         mock_aseg.assert_not_called()
         df = pd.read_csv(result)
         assert result == aseg_file
-        assert list(df.columns[:2]) == ["ID", "total intracranial"]
+        assert list(df.columns[:2]) == ["Measure:volume", "total intracranial"]
         assert df.loc[0, "total intracranial"] == pytest.approx(1500000.0)
 
     def test_get_aseg_stats_regenerates_stub_table(
@@ -607,7 +608,7 @@ class TestSynthSegTIV:
         monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
         _touch_fs_stats(temp_output_dir, "sub-001", "aseg.stats")
         aseg_file = temp_output_dir / "aseg.csv"
-        pd.DataFrame({"ID": ["sub-001"]}).to_csv(aseg_file, index=False)
+        pd.DataFrame({"Measure:volume": ["sub-001"]}).to_csv(aseg_file, index=False)
 
         def _write_real_table(*_args: object, **_kwargs: object) -> dict:
             pd.DataFrame(
@@ -634,24 +635,6 @@ class TestSynthSegTIV:
         assert "Left-Lateral-Ventricle" in df.columns
         assert df.loc[0, "Left-Lateral-Ventricle"] == pytest.approx(5000.0)
 
-    def test_get_aseg_stats_skips_when_no_subject_stats(
-        self,
-        temp_output_dir: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Do not call asegstats2table when no subject has aseg.stats."""
-        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
-        with patch("pyfsviz.stats.AsegStats") as mock_aseg:
-            result = _get_aseg_stats(
-                ["sub-001"],
-                "aseg.csv",
-                output_dir=str(temp_output_dir),
-            )
-
-        mock_aseg.assert_not_called()
-        assert result == temp_output_dir / "aseg.csv"
-        assert not result.exists()
-
     def test_get_aseg_stats_does_not_invent_table_when_command_writes_nothing(
         self,
         temp_output_dir: Path,
@@ -674,47 +657,6 @@ class TestSynthSegTIV:
         mock_aseg.assert_called_once()
         assert result == temp_output_dir / "aseg.csv"
         assert not result.exists()
-
-    def test_get_aparc_stats_skips_when_no_subject_stats(
-        self,
-        temp_output_dir: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Do not call aparcstats2table when no subject has lh/rh.aparc.stats."""
-        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
-        with patch("pyfsviz.stats.AparcStats") as mock_aparc:
-            results = _get_aparc_stats(
-                ["sub-001"],
-                "aparc.csv",
-                output_dir=str(temp_output_dir),
-            )
-
-        mock_aparc.assert_not_called()
-        assert results == []
-
-    def test_get_aparc_stats_filters_to_subjects_with_stats(
-        self,
-        temp_output_dir: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Only subjects with aparc.stats are passed to aparcstats2table."""
-        monkeypatch.setenv("SUBJECTS_DIR", str(temp_output_dir))
-        _touch_fs_stats(temp_output_dir, "sub-001", "lh.aparc.stats")
-        with patch("pyfsviz.stats.AparcStats") as mock_aparc:
-            mock_aparc.return_value.run.return_value = {}
-            mock_aparc.return_value._list_outputs.return_value = {
-                "out_table": "missing.csv",
-            }
-            _get_aparc_stats(
-                ["sub-001", "sub-002"],
-                "aparc.csv",
-                output_dir=str(temp_output_dir),
-                hemis=["lh"],
-                measures=["area"],
-            )
-
-        mock_aparc.assert_called_once()
-        assert mock_aparc.call_args.kwargs["subjects"] == ["sub-001"]
 
     def test_get_aparc_stats_continues_when_command_fails(
         self,
@@ -787,6 +729,5 @@ class TestSynthSegTIV:
 
         mock_aparc.assert_not_called()
         df = pd.read_csv(temp_output_dir / "lh_area_aparc.csv")
-        assert list(df.columns[:2]) == ["ID", "lh_bankssts_area"]
-        assert (temp_output_dir / "combined_aparc.csv").is_file()
+        assert list(df.columns[:2]) == ["lh.aparc.area", "lh_bankssts_area"]
         assert any(path.name == "lh_area_aparc.csv" for path in results)

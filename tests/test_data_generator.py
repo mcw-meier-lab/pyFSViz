@@ -285,7 +285,19 @@ def create_minimal_recon_log(scripts_dir: Path) -> None:
     with open(scripts_dir / "recon-all.log", "w", encoding="utf-8") as f:
         f.write("FreeSurfer recon-all started\n")
         f.write("Processing steps...\n")
+        f.write("talairach_afd: transform filename OK (p=0.444, pval=0.36 >= threshold=0.005)\n")
+        f.write("TalAviQA: 0.999\n")
+        f.write("z-score: 0\n")
         f.write("recon-all finished without error\n")
+
+
+def create_minimal_recon_done(scripts_dir: Path) -> None:
+    """Create minimal recon-all.done file."""
+    with open(scripts_dir / "recon-all.done", "w", encoding="utf-8") as f:
+        f.write("SUBJECT sub-001\n")
+        f.write("VERSION 7.3.2\n")
+        f.write("RUNTIME_HOURS 6.7\n")
+        f.write("CMDARGS -s sub-001 -all -qcache")
 
 
 def create_mock_freesurfer_subject(
@@ -312,6 +324,7 @@ def create_mock_freesurfer_subject(
     create_minimal_surface_files(surf_dir)
     create_minimal_annotation_files(label_dir)
     create_minimal_recon_log(scripts_dir)
+    create_minimal_recon_done(scripts_dir)
 
     return subject_dir
 
