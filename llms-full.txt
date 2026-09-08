@@ -1,0 +1,549 @@
+# pyFSViz
+
+> Python tools for FreeSurfer visualization and QA
+
+# Usage
+
+# pyFSViz
+
+## Description
+
+Python tools for FreeSurfer visualization and quality assurance. pyFSViz builds HTML reports from existing `recon-all` output (individual screenshots and group metric summaries). It does not run FreeSurfer reconstructions.
+
+While manual QA of FreeSurfer data is always recommended, this workflow become untenable with larger datasets, especially longitudinal ones. Several tools are available (some of which are utilized by this package), however, after doing manual QA myself for years, I've found a few key pieces missing.
+
+- The ability to check Talairach registrations (an important first step as this affects downstream processing and brain volume calculations)
+- An easy way to check for outliers at a glance (can be done statistically later on but also useful in catching errors earlier on in the process, especially for large datasets)
+- Comparison between groups (especially helpful for multi-site data that may have different scanner characteristics)
+
+pyFSViz relies on code from Deep-MI's [fsqc](https://github.com/Deep-MI/fsqc/tree/stable), as well as other neuroimaging python packages such as [nipype](https://github.com/nipy/nipype) and [nireports](https://github.com/nipreps/nireports).
+
+> **FreeSurfer and FSL are not part of this install.** Install those tools separately and source their setup scripts in the same shell or job before using pyFSViz. See [Prerequisites](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/).
+
+## Installation
+
+Requires Python 3.10 or newer. This installs the Python package only.
+
+```
+pip install pyfsviz
+```
+
+With [`uv`](https://docs.astral.sh/uv/):
+
+```
+uv tool install pyfsviz
+```
+
+## Usage
+
+After [FreeSurfer and FSL are initialized](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/):
+
+```
+from pyfsviz import FreeSurfer
+
+fs = FreeSurfer()
+fs.gen_batch_reports("reports/")
+fs.gen_group_report("reports/")
+```
+
+See the [quick start](https://mcw-meier-lab.github.io/pyFSViz/user-guide/quickstart/) for output layout, group comparisons, and batch flags.
+
+## Acknowledgements
+
+Thanks to [pawamoy's copier project](https://github.com/pawamoy/copier-uv) for package templates!
+
+## AI Disclosure
+
+Please note that the default Cursor Agent was used in this project. This included models suchs as Grok-4.6 and Composer-2.5. The agent was used to improve base code, add testing, help with html development, and documentation.
+
+# Prerequisites
+
+pyFSViz builds QA reports from **existing** FreeSurfer reconstructions. It does not run `recon-all`, and it does not install or initialize the neuroimaging tools it calls.
+
+Install and source FreeSurfer and FSL yourself
+
+**This package does not ship, install, configure, or source FreeSurfer or FSL.** `pip install pyfsviz` only installs Python dependencies.
+
+Install those tools from their vendors, then initialize them in the **same shell or batch job** before you import pyFSViz. A Python virtualenv is not a substitute for sourcing the vendor setup scripts.
+
+| Tool                                                                       | Used for                                                                             | What “initialized” means                                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| [FreeSurfer](https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall) | Subject directories, color LUT, `mri_convert`, `asegstats2table`, `aparcstats2table` | `FREESURFER_HOME` and `SUBJECTS_DIR` are set, and FreeSurfer binaries are on `PATH` |
+| [FSL](https://fsl.fmrib.ox.ac.uk/fsl/docs/#/install/index)                 | `flirt` for Talairach / MNI overlay images in individual reports                     | `FSLDIR` is set and `flirt` is on `PATH`                                            |
+
+Follow the official install guides linked above. Paths and setup-script names differ by version and site; the commands below are examples only.
+
+## FreeSurfer
+
+1. Install FreeSurfer using the [vendor instructions](https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall).
+
+1. In each session (or job script), source the setup script so the environment is active:
+
+   ```
+   export FREESURFER_HOME=/path/to/freesurfer
+   source "$FREESURFER_HOME/SetUpFreeSurfer.sh"
+   ```
+
+   Some installs use `FreeSurferEnv.sh` instead of `SetUpFreeSurfer.sh`.
+
+1. Point `SUBJECTS_DIR` at **your** recon-all output, not the default subjects tree bundled with FreeSurfer:
+
+   ```
+   export SUBJECTS_DIR=/path/to/your/subjects
+   ```
+
+pyFSViz reads `FREESURFER_HOME` and `SUBJECTS_DIR` when you construct `FreeSurfer()` with no arguments. You can pass the same paths explicitly:
+
+```
+from pyfsviz import FreeSurfer
+
+fs = FreeSurfer(
+    freesurfer_home="/path/to/freesurfer",
+    subjects_dir="/path/to/your/subjects",
+)
+```
+
+Passing those paths does **not** put `mri_convert` or the stats table commands on `PATH`. The setup script (or an equivalent `module load`) still needs to have run in that process environment.
+
+## FSL
+
+Individual reports that include Talairach registration images call FSL `flirt` through nipype. Group-only stats reports do not require FSL.
+
+1. Install FSL using the [vendor instructions](https://fsl.fmrib.ox.ac.uk/fsl/docs/#/install/index).
+
+1. Source FSL in the same session:
+
+   ```
+   export FSLDIR=/path/to/fsl
+   source "$FSLDIR/etc/fslconf/fsl.sh"
+   ```
+
+Unlike FreeSurfer, pyFSViz has no constructor argument for FSL. nipype locates `flirt` from the environment (`FSLDIR` and `PATH`).
+
+## Expected FreeSurfer subjects
+
+pyFSViz does not create reconstructions. Each subject directory under `SUBJECTS_DIR` should already contain a finished `recon-all` tree, including:
+
+- `scripts/recon-all.log`
+- `mri/` (`orig.mgz`, `wm.mgz`, `aparc+aseg.mgz`, …)
+- `mri/transforms/talairach.lta` and `talairach.xfm.lta`
+- `surf/` and `label/`
+- `stats/` (and `stats/synthseg.vol.csv` when SynthSeg TIV should appear in group `aseg` tables)
+
+`FreeSurfer.get_subjects()` only lists folders that contain `mri/transforms/talairach.lta`. Batch reports warn when `recon-all.log` does not end with `finished without error`.
+
+Note that due to some bugs with printing the total intracranial volume [see release notes](https://surfer.nmr.mgh.harvard.edu/fswiki/ReleaseNotes) and discussions around the [default processing](https://surfer.nmr.mgh.harvard.edu/fswiki/eTIV) FreeSurfer uses to calculate this metric, it's recommended to use some version of synthseg or samseg to perform a more robust calculation. While pyFSViz does not run these separate commands, it does look for files like `synthseg.vol.csv` and inserts the total intracranial volume into the aseg stats collection file when it's available.
+
+FreeSurfer 7 and 8 reconstructions are both used. The package already handles the extra LUT column in FreeSurfer 8+.
+
+Continue with [Installation](https://mcw-meier-lab.github.io/pyFSViz/user-guide/installation/index.md) and [Quick start](https://mcw-meier-lab.github.io/pyFSViz/user-guide/quickstart/index.md).
+
+# Installation
+
+It's recommended to install pyFSViz through PyPI. Please note, this does **not** install FreeSurfer or FSL; those must be set up separately. See [Prerequisites](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/index.md).
+
+Requires Python 3.10 or newer.
+
+```
+pip install pyfsviz
+```
+
+With [`uv`](https://docs.astral.sh/uv/):
+
+```
+uv tool install pyfsviz
+```
+
+For a project-local environment:
+
+```
+python -m venv .venv
+source .venv/bin/activate
+pip install pyfsviz
+```
+
+Use the same shell (or job script) for the virtualenv **and** the FreeSurfer / FSL setup scripts. nipype finds `mri_convert` and `flirt` on `PATH`; a venv does not provide those binaries.
+
+After install, continue with [Quick start](https://mcw-meier-lab.github.io/pyFSViz/user-guide/quickstart/index.md).
+
+# Quick start
+
+This page assumes FreeSurfer and FSL are already installed and sourced in the current session. If `mri_convert` or `flirt` is missing, start with [Prerequisites](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/index.md).
+
+## Construct `FreeSurfer`
+
+With `FREESURFER_HOME` and `SUBJECTS_DIR` set:
+
+```
+from pyfsviz import FreeSurfer
+
+fs = FreeSurfer()
+print(fs.get_subjects())
+```
+
+Or pass the paths explicitly (binaries must still be on `PATH`):
+
+```
+fs = FreeSurfer(
+    freesurfer_home="/path/to/freesurfer",
+    subjects_dir="/path/to/your/subjects",
+)
+```
+
+`get_subjects()` returns subject IDs under `SUBJECTS_DIR` that have `mri/transforms/talairach.lta`. Empty list usually means the wrong subjects directory or incomplete reconstructions.
+
+## Individual reports
+
+Generate HTML QA reports for every discovered subject:
+
+```
+results = fs.gen_batch_reports("reports/", skip_existing=True)
+```
+
+Each subject is written to `reports/<subject>/<subject>.html`, with adjacent PNG/SVG images.
+
+*Example Summary card from [OpenNeuro ds004731](https://doi.org/10.18112/openneuro.ds004731.v1.0.0). Regenerate reports with [`generate_reports.py`](https://mcw-meier-lab.github.io/pyFSViz/assets/examples/generate_reports.py).*
+
+See [Individual reports](https://mcw-meier-lab.github.io/pyFSViz/user-guide/individual-reports/index.md) for flags, output layout, and more example figures.
+
+## Group report
+
+Summarize volumes and parcellation metrics across the cohort, flag outliers, and write `reports/group_report.html`:
+
+```
+fs.gen_group_report("reports/")
+```
+
+To compare named groups (for example two subdirectories of `SUBJECTS_DIR`):
+
+```
+fs.gen_group_report("reports/", groups=["control", "patient"])
+```
+
+See [Group reports](https://mcw-meier-lab.github.io/pyFSViz/user-guide/group-reports/index.md) for group definitions, thresholds, and CSV outputs.
+
+## Next
+
+- [Individual reports](https://mcw-meier-lab.github.io/pyFSViz/user-guide/individual-reports/index.md) — screenshots, Talairach overlays, batch flags
+- [Group reports](https://mcw-meier-lab.github.io/pyFSViz/user-guide/group-reports/index.md) — outliers, between-group comparisons
+- [Troubleshooting](https://mcw-meier-lab.github.io/pyFSViz/user-guide/troubleshooting/index.md) — missing env vars and empty subject lists
+
+# Individual reports
+
+An individual report is an HTML page for one reconstructed subject: Talairach registration, `aparc+aseg` screenshots, and surface views (pial, inflated, white matter). The usual entry point is `FreeSurfer.gen_batch_reports()`.
+
+FSL `flirt` is required for the Talairach overlay. FreeSurfer must be initialized for `mri_convert` and the subject tree. See [Prerequisites](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/index.md).
+
+## Batch generation
+
+```
+from pyfsviz import FreeSurfer
+
+fs = FreeSurfer()
+results = fs.gen_batch_reports(
+    "reports/",
+    skip_failed=True,
+    skip_existing=True,
+)
+```
+
+| Argument        | Default                    | Effect                                                                  |
+| --------------- | -------------------------- | ----------------------------------------------------------------------- |
+| `output_dir`    | required                   | Root directory for HTML and images                                      |
+| `subjects`      | all from `get_subjects()`  | Limit to these IDs                                                      |
+| `template`      | packaged `individual.html` | Path to a Jinja2 HTML template                                          |
+| `gen_images`    | `True`                     | Build TLRC / aparc / surface images before HTML                         |
+| `skip_failed`   | `True`                     | Continue after a subject error; store the exception in `results`        |
+| `skip_existing` | `False`                    | Skip subjects that already have `{output_dir}/{subject}/{subject}.html` |
+
+If `skip_existing` is true and the HTML file is already present, that subject is not reprocessed (even if images are missing). Incomplete runs without HTML are still processed.
+
+Set `skip_failed=False` to abort on the first failure.
+
+## What each report contains
+
+For every subject, batch generation:
+
+1. Warns if `scripts/recon-all.log` does not end with `finished without error` (`check_recon_all`). Processing still continues.
+1. Builds a Talairach before/after overlay (`gen_tlrc_data` + `gen_tlrc_report`) using the inverse `talairach.xfm.lta` transform and FSL `flirt`.
+1. Renders `aparc+aseg` screenshot mosaics (`gen_aparcaseg_plots`).
+1. Renders left/right pial, inflated, and white surfaces (`gen_surf_plots`).
+1. Writes HTML with `gen_html_report`.
+
+Please note that [Deep-MI's fsqc](https://github.com/Deep-MI/fsqc/tree/stable) is used to generate the `aparc+aseg` mosaic. This automatically generates the `metrics.csv` file as well.
+
+Open `{output_dir}/{subject}/{subject}.html` in a browser. Images are referenced next to the HTML file, so keep that directory together if you copy reports.
+
+Example figures below are from [OpenNeuro ds004731](https://doi.org/10.18112/openneuro.ds004731.v1.0.0) (reconstructions run separately; pyFSViz only builds the HTML report). The script used to generate them is [`generate_reports.py`](https://mcw-meier-lab.github.io/pyFSViz/assets/examples/generate_reports.py).
+
+### Summary
+
+The **Summary** card is filled from the subject tree (`scripts/`, `stats/aseg.stats`, Talairach transforms) plus `fsqc` rotation when `metrics.csv` is present.
+
+### Metrics
+
+The **Metrics** table is the `fsqc` row from `{output_dir}/{subject}/metrics.csv` (written by `gen_aparcaseg_plots`).
+
+### Talairach registration
+
+### Aparc+aseg
+
+The `aparc+aseg` mosaic is shown at page width. Click it to inspect slices at higher magnification: drag to pan, scroll to zoom, Esc or **Close** to return.
+
+### Surfaces
+
+Surface views are colored with the subject's `aparc` annotation.
+
+To refresh HTML after a pyFSViz update without rerunning screenshots:
+
+```
+fs.gen_batch_reports("reports/", gen_images=False)
+```
+
+## Output layout
+
+```
+reports/
+  sub-001/
+    sub-001.html
+    tlrc.svg
+    aparcaseg.png
+    metrics.csv
+    lh_pial.png
+    lh_infl.png
+    lh_white.png
+    rh_pial.png
+    rh_infl.png
+    rh_white.png
+  sub-002/
+    ...
+```
+
+## One subject at a time
+
+The `gen_*` methods can be called directly for a custom pipeline. Pass the image paths into `gen_html_report` (batch mode does this for you):
+
+```
+subject = "sub-001"
+out = "reports/sub-001"
+
+imgs = [
+    fs.gen_tlrc_report(subject, out),
+    fs.gen_aparcaseg_plots(subject, out),
+    *fs.gen_surf_plots(subject, out),
+]
+fs.gen_html_report(subject, "reports/", img_list=imgs)
+```
+
+`gen_html_report` writes `{output_dir}/{subject}/{subject}.html`.
+
+To skip regenerating images in a batch run, use `gen_batch_reports(..., gen_images=False)` when each subject output directory already contains the PNG/SVG files. That is enough to pick up HTML-only changes such as mosaic zoom; leave `skip_existing=False` so existing `{subject}.html` files are rewritten.
+
+## Custom templates
+
+Pass `template=` to `gen_batch_reports` or `gen_html_report` with a path to a Jinja2 file. The default template receives `timestamp`, `subject`, `summary` (recon-all status, FreeSurfer version, command, Talairach check, …), `tlrc` (SVG markup), `aseg` (image filenames), `surf` (label, filename pairs), `surf_legend` (aparc name/color pairs), and `metrics` (optional `fsqc` dict). The default template used here is based off the [nipreps MRIQC](https://github.com/nipreps/mriqc) reports.
+
+# Group reports
+
+A group report aggregates FreeSurfer stats tables for a cohort, plots metric distributions, and lists subjects that fall outside a standard-deviation threshold. Optionally it compares named groups.
+
+This path uses FreeSurfer’s `asegstats2table` and `aparcstats2table` (so FreeSurfer must be on `PATH`). It does **not** call FSL.
+
+```
+from pyfsviz import FreeSurfer
+
+fs = FreeSurfer()
+fs.gen_group_report("reports/")
+```
+
+The HTML file is `reports/group_report.html`. Stats CSVs are written alongside it (and in `group_<name>/` subfolders when groups live in different subject trees).
+
+## Arguments
+
+| Argument       | Default                   | Effect                                             |
+| -------------- | ------------------------- | -------------------------------------------------- |
+| `output_dir`   | required                  | Directory for HTML and CSV tables                  |
+| `subjects`     | all from `get_subjects()` | Explicit subject list (ignored if `groups` is set) |
+| `groups`       | `None`                    | Named groups for discovery and comparison          |
+| `template`     | packaged `group.html`     | Path to a Jinja2 HTML template                     |
+| `sd_threshold` | `3.0`                     | Flag values beyond mean ± this many SDs            |
+
+If both `subjects` and `groups` are passed, subjects from `groups` are used and a warning is logged.
+
+## Group definitions
+
+Each group can be a directory to scan or an explicit ID list.
+
+Scan subdirectories of `SUBJECTS_DIR` (`subjects_dir/control`, `subjects_dir/patient`):
+
+```
+fs.gen_group_report("reports/", groups=["control", "patient"])
+# equivalent:
+fs.gen_group_report("reports/", groups={"control": None, "patient": None})
+```
+
+Scan an explicit directory:
+
+```
+fs.gen_group_report(
+    "reports/",
+    groups={"control": "/data/cohorts/controls"},
+)
+```
+
+Relative paths are resolved under `SUBJECTS_DIR`. Directory scans use the same rule as `get_subjects()`: only folders with `mri/transforms/talairach.lta`.
+
+Give membership explicitly (subjects must still exist where FreeSurfer stats commands can find them):
+
+```
+fs.gen_group_report(
+    "reports/",
+    groups={
+        "control": ["sub-001", "sub-002"],
+        "patient": ["sub-101", "sub-102"],
+    },
+)
+```
+
+When group directories differ from `SUBJECTS_DIR`, pyFSViz temporarily sets `SUBJECTS_DIR` per group so the table commands read the right tree. (pyFSViz wraps the FreeSurfer `stats2table` commands in nipype-style wrappers to generate the tables, so `SUBJECTS_DIR` must be set).
+
+## What the report contains
+
+- Cohort size, threshold, and (if grouped) per-group counts
+- Outlier subjects, with metric/region and value
+- Quality summary by region (passed / outliers / no data), with one tab per stats table
+- Between-group box plots when `groups` is set, with one tab per stats table that was generated (aseg, LH/RH area, volume, thickness, or any extra measure)
+- Plotly outlier/distribution plots, also one tab per stats table
+
+Group comparison is visual only: each plot shows the value distribution by group, with one point per subject.
+
+Example plots below are from [OpenNeuro ds004731](https://doi.org/10.18112/openneuro.ds004731.v1.0.0). See [`generate_reports.py`](https://mcw-meier-lab.github.io/pyFSViz/assets/examples/generate_reports.py) for the script that produced the HTML (group membership from `participants.tsv` sex).
+
+### Outlier / distribution plots
+
+### Between-group comparison
+
+When `groups=` is set, each metric gets a box + strip plot by group:
+
+## Stats tables
+
+`gen_group_report` calls `get_stats()` to build:
+
+- `aseg.csv` — subcortical volumes (`asegstats2table`). If a subject has `stats/synthseg.vol.csv` or similar, SynthSeg total intracranial volume is merged in. (See [Prerequisites](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/index.md) for more information on this measure).
+- Per-hemisphere aparc tables for area, volume, and thickness (`lh_area_aparc.csv`, `rh_thickness_aparc.csv`, …)
+
+Use these CSVs directly, or see [Stats and outliers](https://mcw-meier-lab.github.io/pyFSViz/user-guide/stats/index.md) to run the same helpers without generating HTML.
+
+# Stats and outliers
+
+The group HTML report is a wrapper around helpers in `pyfsviz.stats`. Use them when you want CSVs, outlier lists, or plots without generating HTML.
+
+FreeSurfer must be initialized: `get_stats()` runs `asegstats2table` and `aparcstats2table`. See [Prerequisites](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/index.md).
+
+## Collect tables
+
+```
+from pyfsviz.stats import get_stats
+
+stats = get_stats(["sub-001", "sub-002"], "reports/")
+# stats["aseg"] -> Path to aseg.csv
+# stats["aparc"] -> list of aparc CSV paths, including combined_aparc.csv
+```
+
+`SUBJECTS_DIR` must point at the tree that contains those subject folders. Optional `measures` (default `area`, `volume`, `thickness`) and `hemis` (default `lh`, `rh`) control which aparc tables are written.
+
+## Outliers
+
+`check_metrics()` flags values more than `sd_threshold` standard deviations from the cohort mean, per region:
+
+```
+from pyfsviz.stats import check_metrics, summarize_outlier_subjects
+
+from pathlib import Path
+
+files = list(Path("reports").glob("*.csv"))
+quality = check_metrics(files, sd_threshold=3.0)
+outliers = summarize_outlier_subjects(quality)
+```
+
+Each outlier entry has `subject_id`, `outlier_count`, and `findings` (metric and region with the raw value).
+
+## Group comparisons
+
+```
+from pyfsviz.stats import gen_group_comparison_plots
+
+groups = {
+    "control": ["sub-001", "sub-002"],
+    "patient": ["sub-101", "sub-102"],
+}
+figures = gen_group_comparison_plots(files, groups)
+```
+
+These are Plotly box plots (one per metric region) with a point per subject. The group HTML report embeds the same figures in one tab per stats table (aseg, LH Area, RH Thickness, …).
+
+## Distribution plots
+
+```
+from pyfsviz.stats import gen_metric_plots
+
+plots = gen_metric_plots(files)
+```
+
+These are Plotly figures (the same family embedded in the group report). One figure is created per region in each stats table (`aseg`, `lh_area_aparc`, and so on).
+
+For the HTML wrapper, see [Group reports](https://mcw-meier-lab.github.io/pyFSViz/user-guide/group-reports/index.md).
+
+# Troubleshooting
+
+Most failures mean FreeSurfer or FSL is missing from the **current** process environment, or `SUBJECTS_DIR` does not contain finished reconstructions. Confirm the tools are sourced as described in [Prerequisites](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/index.md).
+
+| Symptom                                                          | Likely cause                                                                                          |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `FREESURFER_HOME not found`                                      | FreeSurfer was never sourced, or `freesurfer_home=` points at a missing directory                     |
+| `SUBJECTS_DIR not found`                                         | Env var unset / empty, or `subjects_dir=` is wrong                                                    |
+| Empty `get_subjects()` list                                      | No folders with `mri/transforms/talairach.lta` under the subjects directory                           |
+| `mri_convert` / `asegstats2table` / `aparcstats2table` not found | FreeSurfer `bin` is not on `PATH` (passing paths to `FreeSurfer()` does not fix this)                 |
+| nipype / `flirt` error during Talairach images                   | FSL not installed or not sourced (`FSLDIR`, `flirt` on `PATH`)                                        |
+| Batch warning that recon-all did not complete                    | `scripts/recon-all.log` does not end with `finished without error`                                    |
+| Group report missing SynthSeg TIV                                | No `stats/synthseg.vol.csv`, or no `total intracranial` column in that file                           |
+| `skip_existing` left a subject unchanged                         | `{output_dir}/{subject}/{subject}.html` already exists                                                |
+| Individual report has no Metrics table                           | `metrics.csv` was not next to the HTML; regenerate HTML (`gen_images=False` is enough after this fix) |
+
+## Check the environment
+
+```
+echo "$FREESURFER_HOME"
+echo "$SUBJECTS_DIR"
+echo "$FSLDIR"
+command -v mri_convert
+command -v asegstats2table
+command -v flirt
+python -c "from pyfsviz import FreeSurfer; print(FreeSurfer().get_subjects())"
+```
+
+On a cluster, source (or `module load`) FreeSurfer and FSL **in the job script**, not only in a login shell. A Python virtualenv does not provide those binaries.
+
+Package and interpreter details:
+
+```
+pyfsviz --debug-info
+```
+
+## Batch failures
+
+`gen_batch_reports(..., skip_failed=True)` (the default) stores exceptions in the returned dict instead of aborting:
+
+```
+from pathlib import Path
+
+for subject, result in results.items():
+    if not isinstance(result, Path):
+        print(subject, result)
+```
+
+Set `skip_failed=False` when you want the first error to raise.
+
+## Wrong subjects tree
+
+`SetUpFreeSurfer.sh` often sets `SUBJECTS_DIR` to FreeSurfer’s bundled `subjects` folder. Point it at **your** recon-all output, or pass `subjects_dir=` to `FreeSurfer()`.
