@@ -373,20 +373,20 @@ def test_subject_summary_parses_recon_metadata(freesurfer: FreeSurfer) -> None:
 
 def test_subject_summary_flags_failed_talairach(freesurfer: FreeSurfer) -> None:
     """Talairach log errors should fail."""
-    subject_dir = _write_subject_tree(freesurfer.subjects_dir)
+    subject_dir = _write_subject_tree(freesurfer.subjects_dir, "sub-999")
     (subject_dir / "scripts" / "recon-all.done").write_text(
-        "VERSION 8.2.0\nRUNTIME_HOURS 5.3\nCMDARGS -s sub-001\n",
+        "VERSION 8.2.0\nRUNTIME_HOURS 5.3\nCMDARGS -s sub-999\n",
         encoding="utf-8",
     )
     (subject_dir / "scripts" / "recon-all.log").write_text(
         "talairach_afd: Talairach Transform: transforms/talairach.xfm ERROR: talairach_avi failed the transform sanity check\n"
         "TalAviQA: 0.8765\n"
         "z-score: 0\n"
-        "recon-all -s sub-001 exited with ERRORS at now\n",
+        "recon-all -s sub-999 exited with ERRORS at now\n",
         encoding="utf-8",
     )
 
-    summary = freesurfer.subject_summary("sub-001")
+    summary = freesurfer.subject_summary("sub-999")
 
     assert summary["fs_version"] == "8.2.0"
     assert summary["talairach_afd"] == "ERROR: talairach_avi failed the transform sanity check"
