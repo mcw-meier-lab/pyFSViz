@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -82,17 +83,54 @@ def _read_synthseg_tiv(
 def _read_stats_csv(table_file: Path) -> pd.DataFrame:
     """Read a FreeSurfer stats table, accepting comma- or tab-separated files."""
     table_file = Path(table_file)
-    df = pd.DataFrame()
+    comma_df: pd.DataFrame | None = None
     for sep in (",", "\t"):
         try:
             df = pd.read_csv(table_file, sep=sep)
         except pd.errors.EmptyDataError:
             return pd.DataFrame()
-    return df
+        if len(df.columns) > 1:
+            return df
+        if sep == ",":
+            comma_df = df
+    return comma_df if comma_df is not None else pd.DataFrame()
+
+
+def _stats_table_has_data(table_file: Path) -> bool:
+    """Return True when a table exists and has at least one region column."""
+    if not table_file.is_file() or table_file.stat().st_size == 0:
+        return False
+    try:
+        df = _read_stats_csv(table_file)
+    except (OSError, pd.errors.ParserError, UnicodeDecodeError):
+        return False
+    regions = [col for col in df.columns if str(col).strip() not in _STATS_METADATA_COLUMNS]
+    return not df.empty and bool(regions) and table_file.stat().st_size > 0
 
 
 def _subjects_dir() -> Path:
     return Path(os.environ.get("SUBJECTS_DIR", "."))
+
+
+def _run_and_collect_table(interface: FSCommand, dest: Path) -> Path:
+    """Run a stats2table command and copy its output onto ``dest`` if needed."""
+    try:
+        interface.run()
+    except (RuntimeError, OSError) as exc:
+        _logger.warning("Stats command failed for %s: %s", dest.name, exc)
+        return dest
+    produced: Path | None = None
+    try:
+        produced = Path(str(interface._list_outputs()["out_table"]))
+    except (KeyError, TypeError, OSError):
+        produced = None
+    candidates = [path for path in (produced, Path.cwd() / dest.name) if path is not None]
+    for candidate in candidates:
+        if candidate.is_file() and candidate.stat().st_size > 0 and candidate.resolve() != dest.resolve():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(candidate, dest)
+            break
+    return dest
 
 
 def _add_synthseg_tiv_to_aseg(
@@ -299,17 +337,17 @@ def _get_aseg_stats(
     Path
         Path to output tablefile.
     """
-    aseg_cmd = AsegStats(
-        subjects=subjects,
-        meas=meas,
-        delim=delim,
-        skip=skip,
-        tablefile=Path(output_dir, tablefile),
-        segs=segs,
-    )
-    aseg_cmd.run()
-    aseg_file = aseg_cmd._list_outputs()["out_table"]
-    aseg_path = Path(output_dir, aseg_file)
+    aseg_path = Path(output_dir) / tablefile
+    if not _stats_table_has_data(aseg_path):
+        aseg_cmd = AsegStats(
+            subjects=subjects,
+            meas=meas,
+            delim=delim,
+            skip=skip,
+            tablefile=aseg_path,
+            segs=segs,
+        )
+        _run_and_collect_table(aseg_cmd, aseg_path)
     return _add_synthseg_tiv_to_aseg(aseg_path, subjects)
 
 
@@ -359,18 +397,20 @@ def _get_aparc_stats(
 
     for m in measures:
         for h in hemis:
-            aparc_cmd = AparcStats(
-                subjects=subjects,
-                meas=m,
-                hemi=h,
-                delim=delim,
-                skip=skip,
-                tablefile=Path(output_dir, f"{h}_{m}_{tablefile}"),
-                parc=parc,
-            )
-            aparc_cmd.run()
-            res = aparc_cmd._list_outputs()
-            results.append(Path(output_dir, res["out_table"]))
+            aparc_path = Path(output_dir) / f"{h}_{m}_{tablefile}"
+            if not _stats_table_has_data(aparc_path):
+                aparc_cmd = AparcStats(
+                    subjects=subjects,
+                    meas=m,
+                    hemi=h,
+                    delim=delim,
+                    skip=skip,
+                    tablefile=aparc_path,
+                    parc=parc,
+                )
+                _run_and_collect_table(aparc_cmd, aparc_path)
+            if aparc_path.is_file():
+                results.append(aparc_path)
 
     return results
 
@@ -424,6 +464,21 @@ def _load_metrics(stats_files: list[Path]) -> dict[str, pd.DataFrame]:
             continue
         metrics[file.stem] = df
     return metrics
+
+
+def _region_columns(data: pd.DataFrame) -> list[str]:
+    return [
+        col
+        for col in data.columns[1:]
+        if col
+        not in [
+            "ID",
+            "Measure:volume",
+            "lh.aparc.a2009s_thickness",
+            "rh.aparc.a2009s_thickness",
+            "hemi",
+        ]
+    ]
 
 
 def _group_values(
@@ -516,7 +571,7 @@ def compare_group_metrics(
 
     for metric_name, data in metrics.items():
         comparison[metric_name] = {}
-        for region in data[1:]:  # skip id column
+        for region in _region_columns(data):  # skip id column
             grouped_values = _group_values(data, region, groups)
             comparison[metric_name][region] = {
                 group_name: {
@@ -592,7 +647,7 @@ def gen_group_comparison_plots(
         subject_groups = _subject_group_map(groups)
         label = _comparison_metric_label(metric_name)
 
-        for region in data[1:]:
+        for region in _region_columns(data):
             plot_rows = []
             for _, row in data.iterrows():
                 subject_id = str(row[id_col])
@@ -662,7 +717,17 @@ def check_metrics(stats_files: list[Path], sd_threshold: float = 3.0) -> dict:
         metric_summary[metric] = {}
 
         # Get column names - skip first column (subject_id) and last few columns (typically metadata)
-        region_cols = [col for col in data.columns[1:]]
+        region_cols = [
+            col
+            for col in data.columns[1:]
+            if col
+            not in [
+                "ID",
+                "Measure:volume",
+                "lh.aparc.a2009s_thickness",
+                "rh.aparc.a2009s_thickness",
+            ]
+        ]
         id_col = data.columns[0]
 
         for region in region_cols:

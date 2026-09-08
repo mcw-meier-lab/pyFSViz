@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-import math
 import os
 import shutil
 from collections.abc import Mapping
@@ -15,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 import fsqc
 import numpy as np
 import pandas as pd
-from fsqc.fsqcUtils import returnFreeSurferColorLUT
 from importlib_resources import files
 from matplotlib import colors
 from matplotlib import pyplot as plt
@@ -50,49 +48,6 @@ def _report_image_files(directory: Path) -> list[Path]:
     """
     suffixes = {".png", ".svg"}
     return sorted(path for path in directory.rglob("*") if path.is_file() and path.suffix.lower() in suffixes)
-
-
-def _pythonize(value: Any) -> Any:
-    if isinstance(value, np.generic):
-        value = value.item()
-    if value is None:
-        return None
-    if isinstance(value, float) and math.isnan(value):
-        return None
-    try:
-        if bool(pd.isna(value)):
-            return None
-    except (TypeError, ValueError):
-        return value
-    return value
-
-
-def _load_metrics_csv(paths: list[Path], subject: str) -> dict[str, Any] | None:
-    for path in paths:
-        if not path.is_file():
-            continue
-        try:
-            df = pd.read_csv(path)
-        except (
-            pd.errors.EmptyDataError,
-            pd.errors.ParserError,
-            UnicodeDecodeError,
-            PermissionError,
-            OSError,
-        ) as exc:
-            logging.getLogger(__name__).warning("Could not read metrics.csv: %s", exc)
-            continue
-        row: pd.Series | None = None
-        if "subject" in df.columns:
-            subject_data = df[df["subject"] == subject]
-            if not subject_data.empty:
-                row = subject_data.iloc[0]
-        elif len(df) > 0:
-            row = df.iloc[0]
-        if row is None:
-            continue
-        return {str(key): _pythonize(value) for key, value in row.to_dict().items()}
-    return None
 
 
 def _format_runtime(hours: float) -> str:
@@ -142,48 +97,17 @@ def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColorma
 
     """
     freesurfer_home = Path(freesurfer_home) if isinstance(freesurfer_home, str) else freesurfer_home
-    lut = returnFreeSurferColorLUT()
-
-    # some fs7 labels are not present in fs6 LUT, check and add if necessary
-    if not (
-        np.isin(
-            list(range(231, 247)) + [801, 802, 803, 804, 805, 806, 807, 808, 809, 810],
-            lut[:, 0],
-        ).all()
-    ):
-        lutAdd = np.array(
-            (
-                [801, "L_hypothalamus_anterior_inferior", 250, 255, 50, 0],
-                [802, "L_hypothalamus_anterior_superior", 80, 200, 255, 0],
-                [803, "L_hypothalamus_posterior", 255, 160, 0, 0],
-                [804, "L_hypothalamus_tubular_inferior", 255, 160, 200, 0],
-                [805, "L_hypothalamus_tubular_superior", 20, 180, 130, 0],
-                [806, "R_hypothalamus_anterior_inferior", 250, 255, 50, 0],
-                [807, "R_hypothalamus_anterior_superior", 80, 200, 255, 0],
-                [808, "R_hypothalamus_posterior", 255, 160, 0, 0],
-                [809, "R_hypothalamus_tubular_inferior", 255, 160, 200, 0],
-                [810, "R_hypothalamus_tubular_superior", 20, 180, 130, 0],
-                [231, "HP_body", 0, 255, 0, 0],
-                [232, "HP_head", 255, 0, 0, 0],
-                [233, "presubiculum-head", 32, 0, 32, 0],
-                [234, "presubiculum-body", 64, 0, 64, 0],
-                [235, "subiculum-head", 0, 0, 175, 0],
-                [236, "subiculum-body", 0, 0, 255, 0],
-                [237, "CA1-head", 175, 75, 75, 0],
-                [238, "CA1-body", 255, 0, 0, 0],
-                [239, "CA3-head", 0, 80, 0, 0],
-                [240, "CA3-body", 0, 128, 0, 0],
-                [241, "CA4-head", 120, 90, 50, 0],
-                [242, "CA4-body", 196, 160, 128, 0],
-                [243, "GC-ML-DG-head", 75, 125, 175, 0],
-                [244, "GC-ML-DG-body", 32, 200, 255, 0],
-                [245, "molecular_layer_HP-head", 100, 25, 25, 0],
-                [246, "molecular_layer_HP-body", 128, 0, 0, 0],
-            ),
-            dtype=object,
-        )
-
-        lut = np.concatenate((lut, lutAdd), axis=0)
+    lut = pd.read_csv(
+        freesurfer_home / "FreeSurferColorLUT.txt",
+        sep=r"\s+",
+        comment="#",
+        header=None,
+        names=range(8),  # FS8+ adds col for tissue class, so allow extra cols when reading in
+        skipinitialspace=True,
+        skip_blank_lines=True,
+    )
+    lut = lut.iloc[:, :6].dropna(subset=[0, 2, 3, 4, 5])
+    lut = np.array(lut)
 
     lut_tab = np.array(lut[:, (2, 3, 4, 5)].astype(float) / 255, dtype="float32")
     lut_tab[:, 3] = 1
@@ -322,17 +246,17 @@ class FreeSurfer:
 
     def __init__(
         self,
-        freesurfer_home: str | None = None,
-        subjects_dir: str | None = None,
+        freesurfer_home: str | Path | None = None,
+        subjects_dir: str | Path | None = None,
         log_level: str = "INFO",
     ):
         """Initialize the FreeSurfer data.
 
         Parameters
         ----------
-        freesurfer_home : str representing a path to a directory
+        freesurfer_home : str or ``Path`` representing a path to a directory
             Path corresponding to FREESURFER_HOME env var.
-        subjects_dir : str representing a path to a directory
+        subjects_dir : str or ``Path`` representing a path to a directory
             Path corresponding to SUBJECTS_DIR env var.
         log_level : str
             Logging level (e.g., "INFO", "DEBUG", "WARNING").
@@ -353,7 +277,7 @@ class FreeSurfer:
             """Path to the FreeSurfer home directory."""
         else:
             self.freesurfer_home = Path(freesurfer_home)
-            """Path to the FreeSurfer home directory."""
+
         if not self.freesurfer_home.exists():
             raise FileNotFoundError(
                 f"FREESURFER_HOME not found: {self.freesurfer_home}",
@@ -364,13 +288,19 @@ class FreeSurfer:
         if subjects_dir is None:
             self.subjects_dir = Path(os.environ.get("SUBJECTS_DIR") or "")
             """Path to the subjects directory."""
+        elif isinstance(subjects_dir, Path):
+            self.subjects_dir = subjects_dir
+            if not self.subjects_dir.exists():
+                raise FileNotFoundError(f"SUBJECTS_DIR not found: {self.subjects_dir}")
+            os.environ["SUBJECTS_DIR"] = str(subjects_dir)
+            """Path to the subjects directory."""
         else:
             self.subjects_dir = Path(subjects_dir)
-            os.environ["SUBJECTS_DIR"] = Path(subjects_dir)
+            if not self.subjects_dir.exists():
+                raise FileNotFoundError(f"SUBJECTS_DIR not found: {self.subjects_dir}")
+            os.environ["SUBJECTS_DIR"] = subjects_dir
             """Path to the subjects directory."""
-        if not self.subjects_dir.exists():
-            raise FileNotFoundError(f"SUBJECTS_DIR not found: {self.subjects_dir}")
-        """Path to the subjects directory."""
+
         self._mni_nii = files("pyfsviz._internal") / "mni305.cor.nii.gz"
         """Path to the MNI template NIfTI file."""
         self._mni_mgz = files("pyfsviz._internal") / "mni305.cor.mgz"
@@ -532,7 +462,7 @@ class FreeSurfer:
 
         return stats_files
 
-    def _check_talairach(self, subject: str) -> dict[str, Any] | None:
+    def _check_talairach(self, subject: str) -> dict[str, Any]:
         """Check the recon-all log for Talairach Failure Detection."""
         recon_file = self.subjects_dir / subject / "scripts" / "recon-all.log"
 
@@ -552,10 +482,8 @@ class FreeSurfer:
 
         return tlrc
 
-    def _get_recon_info(self, subject: str) -> dict[str, Any] | None:
-        """Collect additional information from the FreeSurfer run, including
-        FreeSurfer version, runtime, and command used.
-        """
+    def _get_recon_info(self, subject: str) -> dict[str, Any]:
+        """Collect additional information from the FreeSurfer run, including FreeSurfer version, runtime, and command used."""
         done_file = self.subjects_dir / subject / "scripts" / "recon-all.done"
 
         if not done_file:
@@ -566,7 +494,7 @@ class FreeSurfer:
             lines = f.readlines()
             for row in lines:
                 if "RUNTIME_HOURS" in row:
-                    info["runtime"] = float(row.split()[-1])
+                    info["runtime"] = row.split()[-1]
                 elif "VERSION" in row:
                     info["version"] = row.split()[1]
                 elif "CMDARGS" in row:
@@ -606,8 +534,8 @@ class FreeSurfer:
 
         return {
             "subject": subject,
-            "recon_status": self.check_recon_all(subject),
-            "runtime": _format_runtime(recon_info["runtime"]),
+            "recon_status": "finished without error" if self.check_recon_all(subject) else "recon failed",
+            "runtime": _format_runtime(float(recon_info["runtime"])),
             "fs_version": recon_info["version"],
             "command": recon_info["command"],
             "talairach_afd": tlrc_info["afd"],
@@ -787,10 +715,6 @@ class FreeSurfer:
             f"{output_dir}/screenshots/{subject}/{subject}.png",
             f"{output_dir}/aparcaseg.png",
         )
-        shutil.move(
-            f"{output_dir}/metrics/{subject}/metrics.csv",
-            f"{output_dir}/metrics.csv",
-        )
         shutil.rmtree(f"{output_dir}/screenshots")
         shutil.rmtree(f"{output_dir}/status")
         shutil.rmtree(f"{output_dir}/metrics")
@@ -941,12 +865,7 @@ class FreeSurfer:
                 surf_tuple = (labels.get(surface_type, surface_type), img.name)
                 surf.append(surf_tuple)
 
-        # Read metrics.csv if it exists (written next to the subject HTML)
-        metrics = _load_metrics_csv(
-            [subject_dir / "metrics.csv", output_path / "metrics.csv"],
-            subject,
-        )
-        summary = self.subject_summary(subject, metrics=metrics)
+        summary = self.subject_summary(subject)
         summary["generated_at"] = datetime.datetime.now(tz=datetime.timezone.utc).strftime(
             "%Y-%m-%d, %H:%M",
         )
@@ -958,7 +877,6 @@ class FreeSurfer:
             "tlrc": tlrc,
             "aseg": aseg,
             "surf": surf,
-            "metrics": metrics,
         }
 
         # Save HTML file in subject directory
@@ -1173,7 +1091,7 @@ class FreeSurfer:
             group_search_dirs = self._group_search_dirs(groups)
             resolved_groups = self.resolve_groups(groups)
             subjects = [subject for group_subjects in resolved_groups.values() for subject in group_subjects]
-        elif subjects is None:
+        elif subjects is None or len(subjects) < 1:
             subjects = self.get_subjects()
 
         self.logger.info(f"Generating group report for {len(subjects)} subjects...")
