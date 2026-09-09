@@ -16,6 +16,7 @@
 /htmlcov/
 /site/
 uv.lock
+coverage.xml
 
 # cache
 .cache/
