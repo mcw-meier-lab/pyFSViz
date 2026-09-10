@@ -206,7 +206,7 @@ def test(ctx: Context, *cli_args: str, match: str = "") -> None:  # noqa: PT028
     ----------
         match: A pytest expression to filter selected tests.
     """
-    os.environ["COVERAGE_FILE"] = f".coverage.{PY_VERSION}"
+    os.environ["COVERAGE_FILE"] = os.getenv("COVERAGE_FILE") or f".coverage.{PY_VERSION}"
     os.environ["PYTHONWARNDEFAULTENCODING"] = "1"
     config_file = "config/pytest.ini"
 
