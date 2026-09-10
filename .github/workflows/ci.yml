@@ -159,6 +159,7 @@ jobs:
         name: .coverage.${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.resolution }}
         path: .coverage*
         include-hidden-files: true
+        archive: false
 
       
   coverage:
