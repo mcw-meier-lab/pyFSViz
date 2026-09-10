@@ -199,9 +199,7 @@ jobs:
     - name: Run coverage
       run: make coverage
 
-    - name: Upload coverage files
-      uses: actions/upload-artifact@v7
-      if: always()
-      with:
-        name: coverage.xml
-        path: coverage.xml
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v5
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
