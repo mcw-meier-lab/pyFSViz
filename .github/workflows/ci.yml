@@ -193,7 +193,7 @@ jobs:
     - name: Download coverage files
       uses: actions/download-artifact@v8
       with:
-        pattern: .coverage-*
+        pattern: .coverage*
         merge-multiple: true
 
     - name: Run coverage
