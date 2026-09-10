@@ -195,6 +195,7 @@ def coverage(ctx: Context) -> None:
     ctx.run(tools.coverage.combine(), nofail=True)
     ctx.run(tools.coverage.report(rcfile="config/coverage.ini"), capture=False)
     ctx.run(tools.coverage.html(rcfile="config/coverage.ini"))
+    ctx.run(tools.coverage.xml(rcfile="config/coverage.ini"))
 
 
 @duty(nofail=PY_VERSION == PY_DEV)

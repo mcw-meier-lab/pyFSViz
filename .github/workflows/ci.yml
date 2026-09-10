@@ -192,7 +192,6 @@ jobs:
       uses: actions/download-artifact@v8
       with:
         pattern: .coverage*
-        path: site/
         merge-multiple: true
 
     - name: Run coverage
@@ -203,4 +202,4 @@ jobs:
       if: always()
       with:
         name: coverage.xml
-        path: site/
+        path: /
