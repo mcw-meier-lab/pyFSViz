@@ -192,9 +192,10 @@ def release(ctx: Context, version: str = "") -> None:
 @duty(silent=True, aliases=["cov"])
 def coverage(ctx: Context) -> None:
     """Report coverage as text and HTML."""
-    ctx.run(tools.coverage.combine(), nofail=True)
+    ctx.run(tools.coverage.combine(rcfile="config/coverage.ini"), nofail=True)
     ctx.run(tools.coverage.report(rcfile="config/coverage.ini"), capture=False)
     ctx.run(tools.coverage.html(rcfile="config/coverage.ini"))
+    ctx.run(tools.coverage.xml(rcfile="config/coverage.ini"))
 
 
 @duty(nofail=PY_VERSION == PY_DEV)
@@ -205,7 +206,7 @@ def test(ctx: Context, *cli_args: str, match: str = "") -> None:  # noqa: PT028
     ----------
         match: A pytest expression to filter selected tests.
     """
-    os.environ["COVERAGE_FILE"] = f".coverage.{PY_VERSION}"
+    os.environ["COVERAGE_FILE"] = os.getenv("COVERAGE_FILE") or f".coverage.{PY_VERSION}"
     os.environ["PYTHONWARNDEFAULTENCODING"] = "1"
     config_file = "config/pytest.ini"
 

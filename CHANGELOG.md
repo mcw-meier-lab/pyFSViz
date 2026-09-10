@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.6.14](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.14) - 2026-09-10
+
+<small>[Compare with 0.6.13](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.13...0.6.14)</small>
+
+## [0.6.13](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.13) - 2026-09-10
+
+<small>[Compare with 0.6.12](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.12...0.6.13)</small>
+
+## [0.6.12](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.12) - 2026-09-10
+
+<small>[Compare with 0.6.11](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.11...0.6.12)</small>
+
+## [0.6.11](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.11) - 2026-09-10
+
+<small>[Compare with 0.6.10](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.10...0.6.11)</small>
+
+## [0.6.10](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.10) - 2026-09-10
+
+<small>[Compare with 0.6.9](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.9...0.6.10)</small>
+
+## [0.6.9](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.9) - 2026-09-10
+
+<small>[Compare with 0.6.8](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.8...0.6.9)</small>
+
+## [0.6.8](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.8) - 2026-09-10
+
+<small>[Compare with 0.6.7](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.7...0.6.8)</small>
+
+## [0.6.7](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.7) - 2026-09-10
+
+<small>[Compare with 0.6.6](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.6...0.6.7)</small>
+
+## [0.6.6](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.6) - 2026-09-10
+
+<small>[Compare with 0.6.5](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.5...0.6.6)</small>
+
+## [0.6.5](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.5) - 2026-09-10
+
+<small>[Compare with 0.6.4](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.4...0.6.5)</small>
+
 ## [0.6.4](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.4) - 2026-09-09
 
 <small>[Compare with 0.6.3](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.3...0.6.4)</small>
