@@ -1,0 +1,15 @@
+# pyFSViz
+
+> Python tools for FreeSurfer visualization and QA
+
+## Usage
+
+- [Overview](https://mcw-meier-lab.github.io/pyFSViz/index.md)
+- [Prerequisites](https://mcw-meier-lab.github.io/pyFSViz/user-guide/prerequisites/index.md)
+- [Installation](https://mcw-meier-lab.github.io/pyFSViz/user-guide/installation/index.md)
+- [Quick start](https://mcw-meier-lab.github.io/pyFSViz/user-guide/quickstart/index.md)
+- [Individual reports](https://mcw-meier-lab.github.io/pyFSViz/user-guide/individual-reports/index.md)
+- [Group reports](https://mcw-meier-lab.github.io/pyFSViz/user-guide/group-reports/index.md)
+- [Stats and outliers](https://mcw-meier-lab.github.io/pyFSViz/user-guide/stats/index.md)
+- [Troubleshooting](https://mcw-meier-lab.github.io/pyFSViz/user-guide/troubleshooting/index.md)
+
