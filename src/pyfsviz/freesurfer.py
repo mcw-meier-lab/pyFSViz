@@ -963,27 +963,28 @@ class FreeSurfer:
 
             self.logger.info(f"[{i}/{len(subjects)}] Processing subject: {subject}")
 
-            try:
-                # Check if recon-all completed successfully
-                if not self.check_recon_all(subject):
-                    self.logger.warning(
-                        f"Subject {subject} recon-all did not complete successfully",
-                    )
+            # Check if recon-all completed successfully
+            if not self.check_recon_all(subject):
+                self.logger.warning(
+                    f"Subject {subject} recon-all did not complete successfully",
+                )
 
-                # Create subject-specific output directory for images
-                subject_output_dir = output_dir / subject
-                subject_output_dir.mkdir(parents=True, exist_ok=True)
+            # Create subject-specific output directory for images
+            subject_output_dir = output_dir / subject
+            subject_output_dir.mkdir(parents=True, exist_ok=True)
 
-                # Generate images
-                self.logger.info(f"  Generating images for {subject}...")
+            # Generate images
+            self.logger.info(f"  Generating images for {subject}...")
 
-                img_list = []
-                if gen_images:
-                    # Generate TLRC data and report
-                    # Use a temporary subdirectory for intermediate files
-                    temp_tlrc_dir = subject_output_dir / "tlrc_temp"
-                    temp_tlrc_dir.mkdir(exist_ok=True)
+            img_list = []
+            fail_count = 0
+            if gen_images:
+                # Generate TLRC data and report
+                # Use a temporary subdirectory for intermediate files
+                temp_tlrc_dir = subject_output_dir / "tlrc_temp"
+                temp_tlrc_dir.mkdir(exist_ok=True)
 
+                try:
                     self.gen_tlrc_data(subject, str(temp_tlrc_dir))
                     tlrc = Path(self.gen_tlrc_report(subject, str(temp_tlrc_dir)))
 
@@ -997,40 +998,51 @@ class FreeSurfer:
 
                     # Clean up intermediate files
                     shutil.rmtree(temp_tlrc_dir, ignore_errors=True)
+                except Exception as e:
+                    err_msg = f"Failed to generate Talairach images for {subject}: {e}"
+                    self.logger.exception(f"  ✗ {err_msg}")
+                    fail_count += 1
+                    if not skip_failed:
+                        raise
 
+                try:
                     # Generate aparc+aseg plots - save directly to subject directory
                     aparcaseg = self.gen_aparcaseg_plots(
                         subject,
                         str(subject_output_dir),
                     )
                     img_list.append(aparcaseg)
+                except Exception as e:
+                    err_msg = f"Failed to generate aparc+aseg images for {subject}: {e}"
+                    self.logger.exception(f"  ✗ {err_msg}")
+                    fail_count += 1
+                    if not skip_failed:
+                        raise
 
+                try:
                     # Generate surface plots - save directly to subject directory
                     surf = self.gen_surf_plots(subject, str(subject_output_dir))
                     img_list.extend(surf)
-                else:
-                    img_list = _report_image_files(subject_output_dir)
+                except Exception as e:
+                    err_msg = f"Failed to generate surface images for {subject}: {e}"
+                    self.logger.exception(f"  ✗ {err_msg}")
+                    fail_count += 1
+                    if not skip_failed:
+                        raise
+            else:
+                img_list = _report_image_files(subject_output_dir)
 
-                # Generate HTML report using all generated images
-                html_file = self.gen_html_report(
-                    subject=subject,
-                    output_dir=str(output_dir),
-                    img_list=img_list,
-                    template=template,
-                )
-
-                results[subject] = html_file
-
-                self.logger.info(f"  ✓ Generated report with images: {html_file}")
-
-            except Exception as e:
-                error_msg = f"Failed to generate report with images for {subject}: {e!s}"
-                results[subject] = e
-
-                self.logger.error(f"  ✗ {error_msg}")  # noqa: TRY400
-
-                if not skip_failed:
-                    raise e  # noqa: TRY201 # pylint: disable=try-except-raise
+            # Generate HTML report using all generated images
+            html_file = self.gen_html_report(
+                subject=subject,
+                output_dir=str(output_dir),
+                img_list=img_list,
+                template=template,
+            )
+            results[subject] = html_file
+            if fail_count > 0:
+                self.logger.warning(f"  !! Image generation failed on {fail_count} section(s)")
+            self.logger.info(f"  ✓ Generated report with images: {html_file}")
 
         successful = sum(1 for result in results.values() if isinstance(result, Path)) - skipped
         failed = len(results) - successful - skipped
