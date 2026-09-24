@@ -95,7 +95,7 @@ higher magnification: drag to pan, scroll to zoom, Esc or **Close** to return.
 
 Surface views are colored with the subject's `aparc` annotation.
 
-![Left hemisphere pial surface](../assets/examples/individual-lh_pial.png){ width="720" }
+![Left and right hemisphere pial surface](../assets/examples/individual-pial.png){ width="720" }
 
 To refresh HTML after a pyFSViz update without rerunning screenshots:
 
@@ -112,12 +112,9 @@ reports/
     tlrc.svg
     aparcaseg.png
     metrics.csv
-    lh_pial.png
-    lh_infl.png
-    lh_white.png
-    rh_pial.png
-    rh_infl.png
-    rh_white.png
+    pial.png
+    inflated.png
+    white.png
   sub-002/
     ...
 ```

@@ -147,6 +147,10 @@ jobs:
         name: objects.inv
         path: site/
 
+    - name: Install headless OpenGL (whippersnappy)
+      if: runner.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1-mesa-dri
+
     - name: Run the test suite
       run: make test
       env:

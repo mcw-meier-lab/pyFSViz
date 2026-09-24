@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.6.18](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.18) - 2026-09-24
+
+<small>[Compare with 0.6.17](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.17...0.6.18)</small>
+
+### Bug Fixes
+
+- lazy whippersnappy import ([4bf2b6e](https://github.com/mcw-meier-lab/pyFSViz/commit/4bf2b6e0a7679cd91879f9abc67fb7276bca5bdb) by Lezlie Espana).
+
+## [0.6.17](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.17) - 2026-09-24
+
+<small>[Compare with 0.6.16](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.16...0.6.17)</small>
+
+### Bug Fixes
+
+- add back try/except block ([846f544](https://github.com/mcw-meier-lab/pyFSViz/commit/846f5443e3d14cc40ca50e44ba8b79f4033f0c8c) by Lezlie Espana).
+- update surf images to use whippersnappy ([215bb35](https://github.com/mcw-meier-lab/pyFSViz/commit/215bb3588f444ca3265fccd8ea559c3f90901b9b) by Lezlie Espana).
+- gen htmls even if some images fail ([272b548](https://github.com/mcw-meier-lab/pyFSViz/commit/272b548e1228c79b293291706ff8a9632d5de059) by Lezlie Espana).
+
 ## [0.6.16](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.16) - 2026-09-15
 
 <small>[Compare with 0.6.15](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.15...0.6.16)</small>

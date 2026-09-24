@@ -16,9 +16,6 @@ import numpy as np
 import pandas as pd
 from importlib_resources import files
 from matplotlib import colors
-from matplotlib import pyplot as plt
-from nibabel.freesurfer.io import read_annot
-from nilearn import plotting
 from nipype.interfaces.freesurfer import MRIConvert
 from nipype.interfaces.fsl import FLIRT
 from nireports.interfaces.reporting.base import SimpleBeforeAfterRPT
@@ -42,12 +39,18 @@ _GroupDefinition = Mapping[str, _GroupSpec] | list[str]
 
 
 def _report_image_files(directory: Path) -> list[Path]:
-    """Return PNG and SVG files under *directory*.
+    """Return report-related PNG and SVG files under *directory*.
 
     ``Path.glob`` does not expand brace patterns such as ``*.{png,svg}``.
     """
-    suffixes = {".png", ".svg"}
-    return sorted(path for path in directory.rglob("*") if path.is_file() and path.suffix.lower() in suffixes)
+    file_list = [
+        "tlrc.svg",
+        "aparcaseg.png",
+        "pial.png",
+        "inflated.png",
+        "white.png",
+    ]
+    return sorted(path for path in directory.rglob("*") if path.is_file() and path.name in file_list)
 
 
 def _format_runtime(hours: float) -> str:
@@ -113,32 +116,6 @@ def get_freesurfer_colormap(freesurfer_home: Path | str) -> colors.ListedColorma
     lut_tab[:, 3] = 1
 
     return colors.ListedColormap(lut_tab)
-
-
-def _decode_annot_name(name: object) -> str:
-    text = name.decode("utf-8", errors="replace") if isinstance(name, bytes) else str(name)
-    return text.strip("\x00").strip()
-
-
-def _read_aparc_ctab(annot_path: Path) -> tuple[np.ndarray, list[str]] | None:
-    try:
-        _labels, ctab, names = read_annot(str(annot_path))
-    except (OSError, ValueError, IndexError, KeyError, TypeError, Exception):  # noqa: BLE001
-        logging.getLogger(__name__).debug("Could not read aparc annotation %s", annot_path)
-        return None
-    decoded = [_decode_annot_name(name) for name in names]
-    return ctab, decoded
-
-
-def _aparc_surf_cmap(annot_path: Path) -> tuple[colors.ListedColormap, int] | None:
-    table = _read_aparc_ctab(annot_path)
-    if table is None:
-        return None
-    ctab, _names = table
-    if ctab.size == 0:
-        return None
-    rgb = np.clip(ctab[:, :3].astype(float) / 255.0, 0, 1)
-    return colors.ListedColormap(rgb), len(rgb)
 
 
 def _html_id(*parts: str) -> str:
@@ -743,51 +720,24 @@ class FreeSurfer:
         ... )
         >>> images = fs_dir.gen_surf_plots("sub-001", "/opt/data/reports/sub-001")
         """
-        surf_dir = f"{self.subjects_dir}/{subject}/surf"
-        label_dir = f"{self.subjects_dir}/{subject}/label"
+        from whippersnappy import snap4  # noqa: PLC0415
+
+        sdir = f"{self.subjects_dir}/{subject}"
+        lh_annot = f"{sdir}/label/lh.aparc.annot"
+        rh_annot = f"{sdir}/label/rh.aparc.annot"
         generated: list[Path] = []
 
-        hemis = {"lh": "left", "rh": "right"}
-        for key, val in hemis.items():
-            pial = f"{surf_dir}/{key}.pial"
-            inflated = f"{surf_dir}/{key}.inflated"
-            sulc = f"{surf_dir}/{key}.sulc"
-            white = f"{surf_dir}/{key}.white"
-            annot = f"{label_dir}/{key}.aparc.annot"
-            cmap_info = _aparc_surf_cmap(Path(annot))
-            if cmap_info is None:
-                cmap: colors.Colormap = self.get_colormap()
-                vmin: float | None = None
-                vmax: float | None = None
-            else:
-                cmap, n_colors = cmap_info
-                vmin, vmax = 0.0, float(n_colors)
-
-            label_files = {pial: "pial", inflated: "infl", white: "white"}
-
-            for surf, label in label_files.items():
-                fig, axs = plt.subplots(2, 3, subplot_kw={"projection": "3d"})
-                for view, row, col in _SURF_VIEWS:
-                    plotting.plot_surf_roi(
-                        surf,
-                        annot,
-                        hemi=val,
-                        view=view,
-                        bg_map=sulc,
-                        bg_on_data=True,
-                        darkness=1,
-                        cmap=cmap,
-                        vmin=vmin,
-                        vmax=vmax,
-                        axes=axs[row, col],
-                        figure=fig,
-                        colorbar=False,
-                    )
-
-                out_file = Path(output_dir) / f"{key}_{label}.png"
-                plt.savefig(out_file, dpi=300, format="png")
-                plt.close()
-                generated.append(out_file)
+        for mesh in ["inflated", "pial", "white"]:
+            img = snap4(
+                sdir=sdir,
+                lh_annot=lh_annot,
+                rh_annot=rh_annot,
+                surfname=mesh,
+                specular=False,
+            )
+            out_file = Path(output_dir) / f"{mesh}.png"
+            img.save(out_file)
+            generated.append(out_file)
 
         return sorted(generated)
 
@@ -850,16 +800,11 @@ class FreeSurfer:
             # Images are already in the subject directory, just reference by filename
             elif "aparcaseg" in img.name:
                 aseg.append(img.name)
-            elif "aparc_legend" in img.stem:
-                continue
             else:
                 labels = {
-                    "lh_pial": "LH Pial",
-                    "rh_pial": "RH Pial",
-                    "lh_infl": "LH Inflated",
-                    "rh_infl": "RH Inflated",
-                    "lh_white": "LH White Matter",
-                    "rh_white": "RH White Matter",
+                    "pial": "LH + RH Pial",
+                    "inflated": "LH + RH Inflated",
+                    "white": "LH + RH White Matter",
                 }
                 surface_type = img.stem
                 surf_tuple = (labels.get(surface_type, surface_type), img.name)
@@ -978,36 +923,58 @@ class FreeSurfer:
                 self.logger.info(f"  Generating images for {subject}...")
 
                 img_list = []
+                fail_count = 0
                 if gen_images:
                     # Generate TLRC data and report
                     # Use a temporary subdirectory for intermediate files
                     temp_tlrc_dir = subject_output_dir / "tlrc_temp"
                     temp_tlrc_dir.mkdir(exist_ok=True)
 
-                    self.gen_tlrc_data(subject, str(temp_tlrc_dir))
-                    tlrc = Path(self.gen_tlrc_report(subject, str(temp_tlrc_dir)))
+                    try:
+                        self.gen_tlrc_data(subject, str(temp_tlrc_dir))
+                        tlrc = Path(self.gen_tlrc_report(subject, str(temp_tlrc_dir)))
 
-                    # Move tlrc.svg to subject directory
-                    if tlrc.exists():
-                        new_tlrc_path = subject_output_dir / "tlrc.svg"
-                        tlrc.rename(new_tlrc_path)
-                        img_list.append(new_tlrc_path)
-                    else:
-                        img_list.append(tlrc)
+                        # Move tlrc.svg to subject directory
+                        if tlrc.exists():
+                            new_tlrc_path = subject_output_dir / "tlrc.svg"
+                            tlrc.rename(new_tlrc_path)
+                            img_list.append(new_tlrc_path)
+                        else:
+                            img_list.append(tlrc)
 
-                    # Clean up intermediate files
-                    shutil.rmtree(temp_tlrc_dir, ignore_errors=True)
+                        # Clean up intermediate files
+                        shutil.rmtree(temp_tlrc_dir, ignore_errors=True)
+                    except Exception as e:
+                        err_msg = f"Failed to generate Talairach images for {subject}: {e}"
+                        self.logger.exception(f"  ✗ {err_msg}")
+                        fail_count += 1
+                        if not skip_failed:
+                            raise
 
-                    # Generate aparc+aseg plots - save directly to subject directory
-                    aparcaseg = self.gen_aparcaseg_plots(
-                        subject,
-                        str(subject_output_dir),
-                    )
-                    img_list.append(aparcaseg)
+                    try:
+                        # Generate aparc+aseg plots - save directly to subject directory
+                        aparcaseg = self.gen_aparcaseg_plots(
+                            subject,
+                            str(subject_output_dir),
+                        )
+                        img_list.append(aparcaseg)
+                    except Exception as e:
+                        err_msg = f"Failed to generate aparc+aseg images for {subject}: {e}"
+                        self.logger.exception(f"  ✗ {err_msg}")
+                        fail_count += 1
+                        if not skip_failed:
+                            raise
 
-                    # Generate surface plots - save directly to subject directory
-                    surf = self.gen_surf_plots(subject, str(subject_output_dir))
-                    img_list.extend(surf)
+                    try:
+                        # Generate surface plots - save directly to subject directory
+                        surf = self.gen_surf_plots(subject, str(subject_output_dir))
+                        img_list.extend(surf)
+                    except Exception as e:
+                        err_msg = f"Failed to generate surface images for {subject}: {e}"
+                        self.logger.exception(f"  ✗ {err_msg}")
+                        fail_count += 1
+                        if not skip_failed:
+                            raise
                 else:
                     img_list = _report_image_files(subject_output_dir)
 
@@ -1018,10 +985,10 @@ class FreeSurfer:
                     img_list=img_list,
                     template=template,
                 )
-
                 results[subject] = html_file
-
                 self.logger.info(f"  ✓ Generated report with images: {html_file}")
+                if fail_count > 0:
+                    self.logger.warning(f"  !! Image generation failed on {fail_count} section(s)")
 
             except Exception as e:
                 error_msg = f"Failed to generate report with images for {subject}: {e!s}"
@@ -1031,7 +998,6 @@ class FreeSurfer:
 
                 if not skip_failed:
                     raise e  # noqa: TRY201 # pylint: disable=try-except-raise
-
         successful = sum(1 for result in results.values() if isinstance(result, Path)) - skipped
         failed = len(results) - successful - skipped
         self.logger.info("\nBatch report generation with images completed:")

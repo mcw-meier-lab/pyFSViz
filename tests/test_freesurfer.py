@@ -2,6 +2,7 @@ import inspect
 import logging
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -90,10 +91,11 @@ def test_gen_aparcaseg_plots(freesurfer: FreeSurfer, temp_output_dir: str) -> No
 @pytest.mark.skip(
     reason="Surface plotting requires complex FreeSurfer file formats - needs improvement",
 )
+@pytest.mark.skipif(sys.platform != "Linux", reason="requires openGL for headless runs")
 def test_gen_surf_plots(freesurfer: FreeSurfer, temp_output_dir: str) -> None:
     """Test surface plot generation."""
     plots = freesurfer.gen_surf_plots("sub-001", temp_output_dir)
-    assert len(plots) == 6  # 2 hemispheres x 3 surface types
+    assert len(plots) == 3  # 3 surface types
     for plot in plots:
         assert plot.exists()
         assert plot.is_file()
@@ -134,10 +136,8 @@ def test_gen_html_report(freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
     # Create different types of SVG files
     svg_files = {
         "tlrc.svg": "<svg><text>Talairach Registration</text></svg>",
-        "aseg.svg": "<svg><text>Aseg Parcellation</text></svg>",
-        "aparc.svg": "<svg><text>Aparc Parcellation</text></svg>",
-        "lh_pial.svg": "<svg><text>LH Pial Surface</text></svg>",
-        "rh_pial.svg": "<svg><text>RH Pial Surface</text></svg>",
+        "aparcaseg.svg": "<svg><text>Aseg Parcellation</text></svg>",
+        "pial.svg": "<svg><text>LH & RH Pial Surface</text></svg>",
     }
 
     for filename, content in svg_files.items():
@@ -162,9 +162,7 @@ def test_gen_html_report(freesurfer: FreeSurfer, temp_output_dir: Path) -> None:
     # Check that all SVG content is included
     assert "Talairach Registration" in html_content
     assert "Aseg Parcellation" in html_content
-    assert "Aparc Parcellation" in html_content
-    assert "LH Pial Surface" in html_content
-    assert "RH Pial Surface" in html_content
+    assert "LH & RH Pial Surface" in html_content
 
     # Check HTML structure
     assert "<html" in html_content
@@ -311,10 +309,10 @@ def test_report_image_files_finds_png_and_svg(tmp_path: Path) -> None:
     (tmp_path / "notes.txt").write_text("ignore", encoding="utf-8")
     nested = tmp_path / "nested"
     nested.mkdir()
-    (nested / "lh_pial.png").write_bytes(b"png")
+    (nested / "pial.png").write_bytes(b"png")
 
     found = {path.name for path in _report_image_files(tmp_path)}
-    assert found == {"aparcaseg.png", "tlrc.svg", "lh_pial.png"}
+    assert found == {"aparcaseg.png", "tlrc.svg", "pial.png"}
 
 
 def _write_subject_tree(root: Path, subject: str = "sub-001") -> Path:

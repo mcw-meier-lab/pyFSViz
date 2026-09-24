@@ -5,6 +5,7 @@ import inspect
 import re
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from importlib_resources import files
@@ -228,14 +229,10 @@ class TestHTMLReportGeneration:
 
         # Create PNG files for other images
         png_files = [
-            "aseg.png",
-            "aparc.png",
-            "lh_pial.png",
-            "rh_pial.png",
-            "lh_infl.png",
-            "rh_infl.png",
-            "lh_white.png",
-            "rh_white.png",
+            "aparcaseg.png",
+            "pial.png",
+            "inflated.png",
+            "white.png",
         ]
 
         img = Image.new("RGB", (1, 1), color="black")
@@ -260,8 +257,7 @@ class TestHTMLReportGeneration:
 
         # Check that SVG is embedded and PNG images have proper paths
         assert "Talairach Registration" in html_content
-        assert "aseg.png" in html_content
-        assert "aparc.png" in html_content
+        assert "aparcaseg.png" in html_content
         assert "<img src=" in html_content
         assert "img-fluid" in html_content
         assert "<svg>" in html_content or "svg" in html_content
@@ -349,7 +345,7 @@ class TestHTMLReportGeneration:
 
         img = Image.new("RGB", (1, 1), color="black")
         img.save(mock_png_dir / "tlrc.png", "PNG")
-        img.save(mock_png_dir / "aseg.png", "PNG")
+        img.save(mock_png_dir / "aparcaseg.png", "PNG")
 
         # Generate HTML report with custom template
         html_file = mock_freesurfer_instance.gen_html_report(
@@ -438,12 +434,9 @@ class TestHTMLReportGeneration:
         mock_png_dir.mkdir(parents=True, exist_ok=True)
 
         surface_files = [
-            "lh_pial.png",
-            "rh_pial.png",
-            "lh_infl.png",
-            "rh_infl.png",
-            "lh_white.png",
-            "rh_white.png",
+            "pial.png",
+            "inflated.png",
+            "white.png",
         ]
 
         img = Image.new("RGB", (1, 1), color="black")
@@ -461,12 +454,9 @@ class TestHTMLReportGeneration:
             html_content = f.read()
 
         # Check that surface labels are properly mapped
-        assert "LH Pial" in html_content
-        assert "RH Pial" in html_content
-        assert "LH Inflated" in html_content
-        assert "RH Inflated" in html_content
-        assert "LH White Matter" in html_content
-        assert "RH White Matter" in html_content
+        assert "LH + RH Pial" in html_content
+        assert "LH + RH Inflated" in html_content
+        assert "LH + RH White Matter" in html_content
 
     def test_gen_html_report_with_actual_template(
         self,
@@ -484,10 +474,9 @@ class TestHTMLReportGeneration:
 
         # Create PNG files
         png_files = [
-            "aseg.png",
+            "aparcaseg.png",
             "aparc.png",
-            "lh_pial.png",
-            "rh_pial.png",
+            "pial.png",
         ]
 
         img = Image.new("RGB", (1, 1), color="black")
@@ -864,3 +853,49 @@ class TestBatchReportGeneration:
         assert "aparcaseg.png" in html_content
         assert "js-zoom-image" in html_content
         assert "Talairach" in html_content
+
+    def test_gen_batch_reports_creates_html_when_surf_fails(
+        self,
+        mock_freesurfer_instance: FreeSurfer,
+        temp_output_dir: Path,
+    ) -> None:
+        """Test individual report generation with failed surface files."""
+        # Create mock image files
+        reports_dir = temp_output_dir / "reports"
+        subject_dir = reports_dir / "sub-001"
+        subject_dir.mkdir(parents=True, exist_ok=True)
+
+        def fake_tlrc_report(subject: str, output_dir: str) -> Path:
+            path = Path(output_dir) / "tlrc.svg"
+            path.write_text(f"<svg><text>Talairach {subject}</text></svg>", encoding="utf-8")
+            return path
+
+        def fake_aparcaseg(subject: str, output_dir: str) -> Path:  # noqa: ARG001
+            path = Path(output_dir) / "aparcaseg.png"
+            Image.new("RGB", (4, 4), color="black").save(path, "PNG")
+            return path
+
+        with (
+            patch.object(mock_freesurfer_instance, "gen_tlrc_data", return_value=None),
+            patch.object(mock_freesurfer_instance, "gen_tlrc_report", side_effect=fake_tlrc_report),
+            patch.object(mock_freesurfer_instance, "gen_aparcaseg_plots", side_effect=fake_aparcaseg),
+            patch.object(
+                mock_freesurfer_instance,
+                "gen_surf_plots",
+                side_effect=RuntimeError("snap4 failed"),
+            ) as mock_surf,
+        ):
+            results = mock_freesurfer_instance.gen_batch_reports(
+                output_dir=reports_dir,
+                subjects=["sub-001"],
+                gen_images=True,
+                skip_failed=True,
+            )
+
+            html_file = results["sub-001"]
+            assert isinstance(html_file, Path)
+            html_content = html_file.read_text(encoding="utf-8")
+            assert "aparcaseg.png" in html_content
+            assert "Talairach" in html_content
+            assert "pial.png" not in html_content
+            assert mock_surf.call_count == 1
