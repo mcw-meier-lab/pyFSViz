@@ -2,6 +2,7 @@ import inspect
 import logging
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -90,6 +91,7 @@ def test_gen_aparcaseg_plots(freesurfer: FreeSurfer, temp_output_dir: str) -> No
 @pytest.mark.skip(
     reason="Surface plotting requires complex FreeSurfer file formats - needs improvement",
 )
+@pytest.mark.skipif(sys.platform != "Linux", reason="requires openGL for headless runs")
 def test_gen_surf_plots(freesurfer: FreeSurfer, temp_output_dir: str) -> None:
     """Test surface plot generation."""
     plots = freesurfer.gen_surf_plots("sub-001", temp_output_dir)
