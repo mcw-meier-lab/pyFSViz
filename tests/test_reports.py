@@ -870,7 +870,7 @@ class TestBatchReportGeneration:
             path.write_text(f"<svg><text>Talairach {subject}</text></svg>", encoding="utf-8")
             return path
 
-        def fake_aparcaseg(subject: str, output_dir: str) -> Path: # noqa: ARG001
+        def fake_aparcaseg(subject: str, output_dir: str) -> Path:  # noqa: ARG001
             path = Path(output_dir) / "aparcaseg.png"
             Image.new("RGB", (4, 4), color="black").save(path, "PNG")
             return path
@@ -880,7 +880,9 @@ class TestBatchReportGeneration:
             patch.object(mock_freesurfer_instance, "gen_tlrc_report", side_effect=fake_tlrc_report),
             patch.object(mock_freesurfer_instance, "gen_aparcaseg_plots", side_effect=fake_aparcaseg),
             patch.object(
-                mock_freesurfer_instance, "gen_surf_plots", side_effect=RuntimeError("snap4 failed"),
+                mock_freesurfer_instance,
+                "gen_surf_plots",
+                side_effect=RuntimeError("snap4 failed"),
             ) as mock_surf,
         ):
             results = mock_freesurfer_instance.gen_batch_reports(
