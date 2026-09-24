@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [0.6.18](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.18) - 2026-09-24
+
+<small>[Compare with 0.6.17](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.17...0.6.18)</small>
+
+### Bug Fixes
+
+- lazy whippersnappy import ([4bf2b6e](https://github.com/mcw-meier-lab/pyFSViz/commit/4bf2b6e0a7679cd91879f9abc67fb7276bca5bdb) by Lezlie Espana).
+
 ## [0.6.17](https://github.com/mcw-meier-lab/pyFSViz/releases/tag/0.6.17) - 2026-09-24
 
 <small>[Compare with 0.6.16](https://github.com/mcw-meier-lab/pyFSViz/compare/0.6.16...0.6.17)</small>
