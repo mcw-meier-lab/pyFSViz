@@ -25,6 +25,8 @@ tools it calls.
 Follow the official install guides linked above. Paths and setup-script names
 differ by version and site; the commands below are examples only.
 
+Additionally, the Deep-MI lab `whippersnappy` tools are used to generate surface images. This tool requires OpenGL to run headless (Mesa EGL or OSMesa). This can cause issues when running on Windows or MacOS, where a GUI will be needed to run.
+
 ## FreeSurfer
 
 1. Install FreeSurfer using the [vendor instructions](https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall).

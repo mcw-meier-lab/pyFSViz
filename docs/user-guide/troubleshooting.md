@@ -7,6 +7,7 @@ title: Troubleshooting
 Most failures mean FreeSurfer or FSL is missing from the **current** process
 environment, or `SUBJECTS_DIR` does not contain finished reconstructions.
 Confirm the tools are sourced as described in [Prerequisites](prerequisites.md).
+If you are running in a headless mode, be sure to have a compatible backend for `whippersnappy` (Mesa EGL or OSMesa). Otherwise, for macOS and Windows, run in a GUI.
 
 | Symptom | Likely cause |
 | --- | --- |
@@ -19,6 +20,7 @@ Confirm the tools are sourced as described in [Prerequisites](prerequisites.md).
 | Group report missing SynthSeg TIV | No `stats/synthseg.vol.csv`, or no `total intracranial` column in that file |
 | `skip_existing` left a subject unchanged | `{output_dir}/{subject}/{subject}.html` already exists |
 | Individual report has no Metrics table | `metrics.csv` was not next to the HTML; regenerate HTML (`gen_images=False` is enough after this fix) |
+| RuntimeError: whippersnappy requires an OpenGL context | Trying to run headless on macOS or Windows
 
 ## Check the environment
 
