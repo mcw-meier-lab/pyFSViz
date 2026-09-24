@@ -19,7 +19,6 @@ from matplotlib import colors
 from nipype.interfaces.freesurfer import MRIConvert
 from nipype.interfaces.fsl import FLIRT
 from nireports.interfaces.reporting.base import SimpleBeforeAfterRPT
-from whippersnappy import snap4
 
 from pyfsviz.reports import Template
 from pyfsviz.stats import (
@@ -721,6 +720,8 @@ class FreeSurfer:
         ... )
         >>> images = fs_dir.gen_surf_plots("sub-001", "/opt/data/reports/sub-001")
         """
+        from whippersnappy import snap4  # noqa: PLC0415
+
         sdir = f"{self.subjects_dir}/{subject}"
         lh_annot = f"{sdir}/label/lh.aparc.annot"
         rh_annot = f"{sdir}/label/rh.aparc.annot"
